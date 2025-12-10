@@ -8,44 +8,38 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, P, ge
         step((generator = generator.apply(thisArg, _arguments || [])).next());
     });
 };
+var __importDefault = (this && this.__importDefault) || function (mod) {
+    return (mod && mod.__esModule) ? mod : { "default": mod };
+};
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.closeRedisConnection = exports.redis = void 0;
-const ioredis_1 = require("ioredis");
+const ioredis_1 = __importDefault(require("ioredis"));
 require("dotenv/config");
 // Function to configure Redis client
-const redisClient = () => {
-    if (process.env.NODE_ENV === 'test') {
-        const RedisMock = require('ioredis-mock');
-        return new RedisMock(); // Use ioredis-mock
+const createRedisClient = () => {
+    if (process.env.NODE_ENV === "test") {
+        // ioredis-mock exports a constructor compatible with ioredis
+        // require here to avoid loading in production
+        // eslint-disable-next-line @typescript-eslint/no-var-requires
+        const RedisMock = require("ioredis-mock");
+        return new RedisMock();
     }
     if (process.env.REDIS_URL) {
-        console.log('Redis connected');
-        return process.env.REDIS_URL;
+        return new ioredis_1.default(process.env.REDIS_URL);
     }
-    throw new Error('Redis connection failed');
+    // Fallback: create a local client if REDIS_URL provided as undefined (will error)
+    return new ioredis_1.default();
 };
-// Initialize Redis client
-exports.redis = new ioredis_1.Redis(redisClient());
+exports.redis = createRedisClient();
 // Function to close Redis connection
 const closeRedisConnection = () => __awaiter(void 0, void 0, void 0, function* () {
     try {
-        // Check if it's the mock or real Redis client
-        if (exports.redis && exports.redis.quit) {
-            // For the real Redis client, check the status and close the connection if it's open
-            if (exports.redis.status === 'ready' || exports.redis.status === 'connecting') {
-                yield exports.redis.pipeline().exec(); // Clear any remaining commands
-                yield exports.redis.quit(); // Close connection
-                // console.log('Real Redis connection closed');
-            }
-            // For mock Redis, directly quit (it won't actually close a connection, but it's fine)
-            else if (exports.redis.status === 'end') {
-                yield exports.redis.quit(); // Mock will resolve this instantly
-                // console.log('Mock Redis connection closed');
-            }
+        if (exports.redis && typeof exports.redis.quit === "function") {
+            yield exports.redis.quit();
         }
     }
     catch (error) {
-        console.error('Error closing Redis connection:', error);
+        // ignore errors on shutdown
     }
 });
 exports.closeRedisConnection = closeRedisConnection;

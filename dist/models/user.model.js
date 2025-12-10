@@ -16,71 +16,58 @@ const mongoose_1 = __importDefault(require("mongoose"));
 const bcryptjs_1 = __importDefault(require("bcryptjs"));
 const jsonwebtoken_1 = __importDefault(require("jsonwebtoken"));
 require("dotenv/config");
-//email regex checker
-const emailRegexPattern = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-//User Schema
 const userSchema = new mongoose_1.default.Schema({
-    name: {
-        type: String,
-        required: [true, "Enter username"],
-    },
-    email: {
-        type: String,
-        required: [true, "Enter username"],
-        validate: {
-            validator: function (value) {
-                return emailRegexPattern.test(value);
-            },
-            message: "please enter a valid email",
+    name: { type: String, required: true },
+    email: { type: String, required: true, index: true, unique: true },
+    password: { type: String },
+    avatar: { type: String },
+    role: { type: String, enum: ["gamer", "brand", "admin"], default: "gamer" },
+    googleId: { type: String },
+    companyName: { type: String },
+    isVerified: { type: Boolean, default: false },
+    analytics: {
+        lifetime: {
+            puzzlesSolved: { type: Number, default: 0 },
+            totalPoints: { type: Number, default: 0 },
+            totalTime: { type: Number, default: 0 },
+            totalMoves: { type: Number, default: 0 },
+            attempts: { type: Number, default: 0 },
+            successRate: { type: Number, default: 0 },
+        },
+        daily: {
+            date: { type: String },
+            puzzlesSolved: { type: Number, default: 0 },
         },
     },
-    password: {
-        type: String,
-        required: [true, "Enter username"],
-    },
-    avatar: {
-        public_id: String,
-        url: String,
-    },
-    role: {
-        type: String,
-        default: "user",
-    },
-    isVerified: {
-        type: Boolean,
-        default: false,
-    },
-    account_type: {
-        type: String,
-        enum: ["freeUser", "proUser"],
-        default: "freeUser",
-    },
+    puzzlesSolved: [{ type: String }],
 }, { timestamps: true });
-// sign access token
 userSchema.methods.SignAccessToken = function () {
+    // Normalize ACCESS_TOKEN_EXPIRE: allow numeric (hours) or string like '1d'/'24h'
+    const raw = process.env.ACCESS_TOKEN_EXPIRE || "24h";
+    const expiresIn = isNaN(Number(raw)) ? raw : `${Number(raw)}h`;
     return jsonwebtoken_1.default.sign({ id: this._id }, process.env.ACCESS_TOKEN || "", {
-        expiresIn: "1d",
+        expiresIn,
     });
 };
-// sign refresh token
 userSchema.methods.SignRefreshToken = function () {
+    const raw = process.env.REFRESH_TOKEN_EXPIRE || "3d";
+    const expiresIn = isNaN(Number(raw)) ? raw : `${Number(raw)}d`;
     return jsonwebtoken_1.default.sign({ id: this._id }, process.env.REFRESH_TOKEN || "", {
-        expiresIn: "3d",
+        expiresIn,
     });
 };
-// Hash Password before saving
 userSchema.pre("save", function (next) {
     return __awaiter(this, void 0, void 0, function* () {
-        if (!this.isModified("password")) {
-            next();
-        }
+        if (!this.isModified("password") || !this.password)
+            return next();
         this.password = yield bcryptjs_1.default.hash(this.password, 10);
         next();
     });
 });
-// compare password
 userSchema.methods.comparePassword = function (enteredPassword) {
     return __awaiter(this, void 0, void 0, function* () {
+        if (!this.password)
+            return false;
         return yield bcryptjs_1.default.compare(enteredPassword, this.password);
     });
 };

@@ -2,9 +2,11 @@ import express, { Request, Response, NextFunction } from "express";
 import cors from "cors";
 import cookieParser from "cookie-parser";
 import "dotenv/config";
-import userRouter from "./routes/user.route";
-import ticketRouter from "./routes/ticket.route";
-import meetingRouter from "./routes/meeting.route";
+import authRouter from "./routes/auth.route";
+import puzzleRouter from "./routes/puzzle.route";
+import brandRouter from "./routes/brand.route";
+import leaderboardRouter from "./routes/leaderboard.route";
+import instantRouter from "./routes/instant.route";
 
 const app = express();
 
@@ -17,12 +19,19 @@ app.use(cookieParser());
 //cors
 app.use(
   cors({
-    origin: "*", 
+    origin: "*",
   })
 );
 
 // routes
-app.use("/api/v1", userRouter, ticketRouter, meetingRouter);
+app.use(
+  "/api/v1",
+  authRouter,
+  puzzleRouter,
+  brandRouter,
+  leaderboardRouter,
+  instantRouter
+);
 
 //testing api
 app.use("/test", (req: Request, res: Response) => {

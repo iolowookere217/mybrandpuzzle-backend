@@ -14,18 +14,24 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
 Object.defineProperty(exports, "__esModule", { value: true });
 const mongoose_1 = __importDefault(require("mongoose"));
 require("dotenv/config");
-const dbUrl = process.env.DB_URI || '';
+const dbUrl = process.env.DB_URI || "";
 //connect database
 const connectDB = () => __awaiter(void 0, void 0, void 0, function* () {
+    if (!dbUrl) {
+        // in test mode we skip connecting; otherwise warn and skip
+        if (process.env.NODE_ENV === "test")
+            return;
+        console.warn("DB_URI not set, skipping database connection");
+        return;
+    }
     try {
-        yield mongoose_1.default.connect(dbUrl).then((data) => {
-            console.log(`Database connected with ${data.connection.host}`);
-        });
+        const data = yield mongoose_1.default.connect(dbUrl);
+        console.log(`Database connected with ${data.connection.host}`);
     }
     catch (error) {
-        console.log(error);
+        console.error(error);
+        // retry after 5s
         setTimeout(connectDB, 5000).unref();
-        ;
     }
 });
 exports.default = connectDB;

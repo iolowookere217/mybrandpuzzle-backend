@@ -31,13 +31,17 @@ const createMeeting = (req, res) => __awaiter(void 0, void 0, void 0, function* 
             throw new ErrorHandler_1.default("All fields are required", 400);
         }
         //Check user meetings limit
-        const accountType = user.account_type;
-        if (accountType === "freeUser") {
-            const totalMeetings = yield meeting_model_1.default.countDocuments({ host_email: hostEmail });
-            if (totalMeetings >= 2) {
-                throw new ErrorHandler_1.default("Free users can only create up to 2 meetings. Upgrade your account to create more.", 403);
-            }
-        }
+        // TODO: Implement account_type field in user model to enable meeting limits
+        // const accountType = user.account_type;
+        // if (accountType === "freeUser") {
+        //   const totalMeetings = await meetingModel.countDocuments({ host_email: hostEmail });
+        //   if (totalMeetings >= 2) {
+        //     throw new ErrorHandler(
+        //       "Free users can only create up to 2 meetings. Upgrade your account to create more.",
+        //       403
+        //     );
+        //   }
+        // }
         // Combine date and time into ISO format for Zoom API
         const startTime = new Date(`${date}T${time}:00`);
         // Check if the scheduled time is in the past
