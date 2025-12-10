@@ -103,6 +103,7 @@ exports.activateUser = (0, catchAsyncError_1.CatchAsyncError)((req, res, next) =
     }
 }));
 exports.loginUser = (0, catchAsyncError_1.CatchAsyncError)((req, res, next) => __awaiter(void 0, void 0, void 0, function* () {
+    var _a;
     try {
         const { email, password } = req.body;
         if (!email || !password) {
@@ -115,7 +116,7 @@ exports.loginUser = (0, catchAsyncError_1.CatchAsyncError)((req, res, next) => _
             return next(new ErrorHandler_1.default("Invalid email or password", 403));
         }
         //check password
-        const isPasswordMatch = yield user.comparePassword(password);
+        const isPasswordMatch = yield ((_a = user.comparePassword) === null || _a === void 0 ? void 0 : _a.call(user, password));
         if (!isPasswordMatch) {
             return next(new ErrorHandler_1.default("Invalid email or password", 403));
         }

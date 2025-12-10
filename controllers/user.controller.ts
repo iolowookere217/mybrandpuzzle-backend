@@ -173,7 +173,7 @@ export const loginUser = CatchAsyncError(
       }
 
       //check password
-      const isPasswordMatch = await user.comparePassword(password);
+      const isPasswordMatch = await user.comparePassword?.(password);
       if (!isPasswordMatch) {
         return next(new ErrorHandler("Invalid email or password", 403));
       }
