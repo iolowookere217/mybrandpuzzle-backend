@@ -8,9 +8,9 @@ This is a puzzle gaming backend built with Node.js, Express, TypeScript, MongoDB
 
 ## Base URL
 
-```
+````
 http://localhost:4000/api/v1
-```
+
 
 All endpoints use JSON (except file uploads which use multipart/form-data).
 
@@ -40,7 +40,7 @@ All endpoints use JSON (except file uploads which use multipart/form-data).
   },
   "accessToken": "jwt_token_string"
 }
-```
+````
 
 ---
 
