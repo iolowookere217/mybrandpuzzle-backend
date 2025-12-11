@@ -13,6 +13,7 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
 };
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.startScheduler = void 0;
+const mongoose_1 = __importDefault(require("mongoose"));
 const instantEvent_model_1 = __importDefault(require("../models/instantEvent.model"));
 const leaderboard_model_1 = __importDefault(require("../models/leaderboard.model"));
 const user_model_1 = __importDefault(require("../models/user.model"));
@@ -21,6 +22,10 @@ const startScheduler = () => {
     // run every 30 seconds
     setInterval(() => __awaiter(void 0, void 0, void 0, function* () {
         try {
+            // Skip if database is not connected
+            if (mongoose_1.default.connection.readyState !== 1) {
+                return;
+            }
             const now = new Date();
             // start pending events whose startAt <= now
             const toStart = yield instantEvent_model_1.default.find({

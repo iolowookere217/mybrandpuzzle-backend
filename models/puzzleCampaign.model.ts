@@ -19,7 +19,7 @@ export interface IPuzzleCampaign extends Document {
 
 const puzzleCampaignSchema: Schema<IPuzzleCampaign> = new mongoose.Schema(
   {
-    brandId: { type: String, required: true, index: true },
+    brandId: { type: String, required: true },
     title: { type: String, required: true },
     description: { type: String, required: true },
     puzzleImageUrl: { type: String, required: true },
