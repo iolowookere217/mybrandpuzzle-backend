@@ -14,6 +14,7 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
 Object.defineProperty(exports, "__esModule", { value: true });
 const app_1 = require("./app");
 require("dotenv/config");
+const mongoose_1 = __importDefault(require("mongoose"));
 const db_1 = __importDefault(require("./utils/db"));
 const leaderboard_model_1 = __importDefault(require("./models/leaderboard.model"));
 const scheduler_1 = require("./utils/scheduler");
@@ -30,13 +31,16 @@ app_1.app.listen(PORT, () => {
         setTimeout(function resetAndSchedule() {
             return __awaiter(this, void 0, void 0, function* () {
                 try {
-                    const todayKey = new Date().toISOString().slice(0, 10);
-                    // keep today's leaderboard; remove older daily leaderboards
-                    yield leaderboard_model_1.default.deleteMany({
-                        type: "daily",
-                        date: { $ne: todayKey },
-                    });
-                    console.log("Daily leaderboard reset completed");
+                    // Skip if database is not connected
+                    if (mongoose_1.default.connection.readyState === 1) {
+                        const todayKey = new Date().toISOString().slice(0, 10);
+                        // keep today's leaderboard; remove older daily leaderboards
+                        yield leaderboard_model_1.default.deleteMany({
+                            type: "daily",
+                            date: { $ne: todayKey },
+                        });
+                        console.log("Daily leaderboard reset completed");
+                    }
                 }
                 catch (err) {
                     console.error("Error resetting daily leaderboard:", err);

@@ -1,3 +1,4 @@
+import mongoose from "mongoose";
 import InstantEventModel from "../models/instantEvent.model";
 import LeaderboardModel from "../models/leaderboard.model";
 import PuzzleAttemptModel from "../models/puzzleAttempt.model";
@@ -8,6 +9,11 @@ export const startScheduler = () => {
   // run every 30 seconds
   setInterval(async () => {
     try {
+      // Skip if database is not connected
+      if (mongoose.connection.readyState !== 1) {
+        return;
+      }
+
       const now = new Date();
 
       // start pending events whose startAt <= now

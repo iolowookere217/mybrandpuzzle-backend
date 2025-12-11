@@ -35,7 +35,7 @@ var __importStar = (this && this.__importStar) || (function () {
 Object.defineProperty(exports, "__esModule", { value: true });
 const mongoose_1 = __importStar(require("mongoose"));
 const puzzleCampaignSchema = new mongoose_1.default.Schema({
-    brandId: { type: String, required: true, index: true },
+    brandId: { type: String, required: true },
     title: { type: String, required: true },
     description: { type: String, required: true },
     puzzleImageUrl: { type: String, required: true },
