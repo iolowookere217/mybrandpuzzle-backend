@@ -1,17 +1,17 @@
 import express from "express";
 import {
-  getDailyLeaderboard,
-  getInstantLeaderboard,
+  getWeeklyLeaderboard,
+  getLeaderboardByWeek,
 } from "../controllers/leaderboard.controller";
 import { isAuthenticated } from "../utils/auth";
 
 const router = express.Router();
 
-router.get("/leaderboards/daily", isAuthenticated, getDailyLeaderboard);
+router.get("/leaderboards/weekly", isAuthenticated, getWeeklyLeaderboard);
 router.get(
-  "/leaderboards/instant/:eventId",
+  "/leaderboards/weekly/:weekKey",
   isAuthenticated,
-  getInstantLeaderboard
+  getLeaderboardByWeek
 );
 
 export default router;

@@ -36,6 +36,12 @@ Object.defineProperty(exports, "__esModule", { value: true });
 const mongoose_1 = __importStar(require("mongoose"));
 const puzzleCampaignSchema = new mongoose_1.default.Schema({
     brandId: { type: String, required: true },
+    gameType: {
+        type: String,
+        enum: ["puzzle", "wordHunt"],
+        required: true,
+        default: "puzzle",
+    },
     title: { type: String, required: true },
     description: { type: String, required: true },
     puzzleImageUrl: { type: String, required: true },
@@ -47,10 +53,13 @@ const puzzleCampaignSchema = new mongoose_1.default.Schema({
             correctIndex: { type: Number, required: true },
         },
     ],
+    words: [{ type: String }], // for wordHunt games
     timeLimit: { type: Number, required: true },
     analytics: { type: mongoose_1.Schema.Types.Mixed, default: {} },
 }, { timestamps: true });
 // index for quick analytics by brand
 puzzleCampaignSchema.index({ brandId: 1 });
+// index for querying by game type
+puzzleCampaignSchema.index({ gameType: 1 });
 const PuzzleCampaignModel = mongoose_1.default.model("PuzzleCampaign", puzzleCampaignSchema);
 exports.default = PuzzleCampaignModel;

@@ -9,14 +9,16 @@ const auth_1 = require("../utils/auth");
 const router = express_1.default.Router();
 // Google OAuth
 router.post("/auth/google", auth_controller_1.googleAuth);
+// Unified login for both user types
+router.post("/auth/login", auth_controller_1.login);
 // Gamer routes (email/password)
 router.post("/auth/gamer/register", auth_controller_1.registerGamer);
 router.post("/auth/gamer/activate", auth_controller_1.activateGamer);
-router.post("/auth/gamer/login", auth_controller_1.loginGamer);
+router.post("/auth/gamer/resend-activation", auth_controller_1.resendGamerActivation);
 // Brand routes
 router.post("/auth/brand/register", auth_controller_1.registerBrand);
 router.post("/auth/brand/activate", auth_controller_1.activateBrand);
-router.post("/auth/brand/login", auth_controller_1.loginBrand);
+router.post("/auth/brand/resend-activation", auth_controller_1.resendBrandActivation);
 // Logout (requires authentication)
 router.post("/auth/logout", auth_1.isAuthenticated, auth_controller_1.logout);
 exports.default = router;

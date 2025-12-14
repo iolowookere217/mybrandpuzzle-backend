@@ -185,8 +185,8 @@ export const activateGamer = CatchAsyncError(
   }
 );
 
-// Gamer login
-export const loginGamer = CatchAsyncError(
+// Unified login for both gamers and brands
+export const login = CatchAsyncError(
   async (req: Request, res: Response, next: NextFunction) => {
     try {
       const { email, password } = req.body;
@@ -194,7 +194,7 @@ export const loginGamer = CatchAsyncError(
         return next(new ErrorHandler("Missing email or password", 400));
 
       const user = await UserModel.findOne({ email }).select("+password");
-      if (!user || user.role !== "gamer")
+      if (!user)
         return next(new ErrorHandler("Invalid credentials", 403));
 
       const match = await user.comparePassword!(password);
@@ -273,28 +273,6 @@ export const registerBrand = CatchAsyncError(
   }
 );
 
-// Brand login
-export const loginBrand = CatchAsyncError(
-  async (req: Request, res: Response, next: NextFunction) => {
-    try {
-      const { email, password } = req.body;
-      if (!email || !password)
-        return next(new ErrorHandler("Missing creds", 400));
-
-      const user = await UserModel.findOne({ email }).select("+password");
-      if (!user || user.role !== "brand")
-        return next(new ErrorHandler("Invalid credentials", 403));
-
-      const match = await user.comparePassword!(password);
-      if (!match) return next(new ErrorHandler("Invalid credentials", 403));
-
-      sendToken(user, 200, res);
-    } catch (error: any) {
-      return next(new ErrorHandler(error.message, 400));
-    }
-  }
-);
-
 export const logout = CatchAsyncError(async (req: Request, res: Response) => {
   res.cookie("access_token", "", { maxAge: 1 });
   res.cookie("refresh_token", "", { maxAge: 1 });
@@ -367,6 +345,117 @@ export const activateBrand = CatchAsyncError(
       });
 
       sendToken(user, 201, res);
+    } catch (error: any) {
+      return next(new ErrorHandler(error.message, 400));
+    }
+  }
+);
+
+// Resend activation email for gamer
+export const resendGamerActivation = CatchAsyncError(
+  async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const { email } = req.body;
+
+      if (!email) {
+        return next(new ErrorHandler("Email is required", 400));
+      }
+
+      // Find user
+      const user = await UserModel.findOne({ email });
+      if (!user) {
+        return next(new ErrorHandler("User not found", 404));
+      }
+
+      if (user.role !== "gamer") {
+        return next(
+          new ErrorHandler("This email is not registered as a gamer", 400)
+        );
+      }
+
+      if (user.isVerified) {
+        return next(new ErrorHandler("Account is already verified", 400));
+      }
+
+      // Create new activation token
+      const activationToken = createActivationToken({
+        name: user.name,
+        email: user.email,
+        password: user.password, // hashed password from DB
+      });
+
+      const activationCode = activationToken.activationCode;
+      const data = { user: { name: user.name }, activationCode };
+
+      // Send activation email
+      await sendMail({
+        email: user.email,
+        subject: "Verify your gamer account",
+        template: "activation-mail.ejs",
+        data,
+      });
+
+      res.status(200).json({
+        success: true,
+        message: `Activation email resent to ${email}`,
+        activationToken: activationToken.token,
+      });
+    } catch (error: any) {
+      return next(new ErrorHandler(error.message, 400));
+    }
+  }
+);
+
+// Resend activation email for brand
+export const resendBrandActivation = CatchAsyncError(
+  async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const { email } = req.body;
+
+      if (!email) {
+        return next(new ErrorHandler("Email is required", 400));
+      }
+
+      // Find user
+      const user = await UserModel.findOne({ email });
+      if (!user) {
+        return next(new ErrorHandler("User not found", 404));
+      }
+
+      if (user.role !== "brand") {
+        return next(
+          new ErrorHandler("This email is not registered as a brand", 400)
+        );
+      }
+
+      if (user.isVerified) {
+        return next(new ErrorHandler("Account is already verified", 400));
+      }
+
+      // Create new activation token
+      const activationToken = createActivationToken({
+        name: user.name,
+        email: user.email,
+        password: user.password, // hashed password from DB
+        companyName: user.companyName,
+      });
+
+      const activationCode = activationToken.activationCode;
+      const data = { user: { name: user.name }, activationCode };
+
+      // Send activation email
+      await sendMail({
+        email: user.email,
+        subject: "Verify your brand account",
+        template: "activation-mail.ejs",
+        data,
+      });
+
+      res.status(200).json({
+        success: true,
+        message: `Activation email resent to ${email}`,
+        activationToken: activationToken.token,
+      });
     } catch (error: any) {
       return next(new ErrorHandler(error.message, 400));
     }

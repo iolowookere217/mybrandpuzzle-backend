@@ -14,7 +14,7 @@ export const createCampaign = CatchAsyncError(
       if (brandUser.role !== "brand")
         return next(new ErrorHandler("Only brands can create campaigns", 403));
 
-      const { questions, title, description } = req.body;
+      const { questions, title, description, gameType, words } = req.body;
 
       // validate required fields
       if (!title || typeof title !== "string" || title.trim() === "") {
@@ -38,15 +38,43 @@ export const createCampaign = CatchAsyncError(
         );
       }
 
-      // multer stores single-file uploads in req.file, or older setups may place files in req.files
-      const filesAny: any = req.files;
-      const uploadedFile: any =
-        (req as any).file ||
-        filesAny?.image?.[0] ||
-        filesAny?.puzzleImage?.[0] ||
-        filesAny?.originalImage?.[0];
+      // Validate gameType field
+      const campaignGameType = gameType || "puzzle";
+      if (campaignGameType !== "puzzle" && campaignGameType !== "wordHunt") {
+        return next(
+          new ErrorHandler('gameType must be either "puzzle" or "wordHunt"', 400)
+        );
+      }
 
-      if (!uploadedFile) return next(new ErrorHandler("Missing image", 400));
+      // For wordHunt games, validate words array
+      if (campaignGameType === "wordHunt") {
+        if (!words || !Array.isArray(words) || words.length === 0) {
+          return next(
+            new ErrorHandler(
+              "words array is required for wordHunt games and must contain at least one word",
+              400
+            )
+          );
+        }
+      }
+
+      // Get brand profile (no restriction on number of campaigns)
+      const brand = await BrandModel.findOne({ userId: brandUser._id });
+      if (!brand) {
+        return next(new ErrorHandler("Brand profile not found", 404));
+      }
+
+      // multer stores single-file upload in req.file
+      const uploadedFile: any = (req as any).file;
+
+      if (!uploadedFile) {
+        return next(
+          new ErrorHandler(
+            'Missing image file. Please upload using field name "image"',
+            400
+          )
+        );
+      }
 
       // use a single timestamp so both stored names are related
       const now = Date.now();
@@ -158,17 +186,26 @@ export const createCampaign = CatchAsyncError(
         );
       }
 
-      const campaign = await PuzzleCampaignModel.create({
+      // Prepare campaign data
+      const campaignData: any = {
         brandId: brandUser._id,
+        gameType: campaignGameType,
         title: title.trim(),
         description: description.trim(),
         puzzleImageUrl: puzzleUrl,
         originalImageUrl: originalUrl,
         questions: parsedQuestions,
         timeLimit: timeLimitVal,
-      });
+      };
 
-      // update brand campaigns list
+      // For wordHunt games, add words array
+      if (campaignGameType === "wordHunt" && words) {
+        campaignData.words = words;
+      }
+
+      const campaign = await PuzzleCampaignModel.create(campaignData);
+
+      // Update brand campaigns list (no restrictions on number of campaigns)
       await BrandModel.findOneAndUpdate(
         { userId: brandUser._id },
         { $push: { campaigns: campaign._id } }

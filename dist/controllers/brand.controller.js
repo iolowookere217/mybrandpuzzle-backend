@@ -21,12 +21,12 @@ const firebaseConfig_1 = require("../firebaseConfig");
 const puzzleAttempt_model_1 = __importDefault(require("../models/puzzleAttempt.model"));
 // Create a puzzle campaign (brands only). Expects multipart upload with one file: "image" (used for both scrambled and original)
 exports.createCampaign = (0, catchAsyncError_1.CatchAsyncError)((req, res, next) => __awaiter(void 0, void 0, void 0, function* () {
-    var _a, _b, _c, _d, _e, _f;
+    var _a, _b, _c;
     try {
         const brandUser = req.user;
         if (brandUser.role !== "brand")
             return next(new ErrorHandler_1.default("Only brands can create campaigns", 403));
-        const { questions, title, description } = req.body;
+        const { questions, title, description, gameType, words } = req.body;
         // validate required fields
         if (!title || typeof title !== "string" || title.trim() === "") {
             return next(new ErrorHandler_1.default("title is required and must be a non-empty string", 400));
@@ -36,14 +36,27 @@ exports.createCampaign = (0, catchAsyncError_1.CatchAsyncError)((req, res, next)
             description.trim() === "") {
             return next(new ErrorHandler_1.default("description is required and must be a non-empty string", 400));
         }
-        // multer stores single-file uploads in req.file, or older setups may place files in req.files
-        const filesAny = req.files;
-        const uploadedFile = req.file ||
-            ((_a = filesAny === null || filesAny === void 0 ? void 0 : filesAny.image) === null || _a === void 0 ? void 0 : _a[0]) ||
-            ((_b = filesAny === null || filesAny === void 0 ? void 0 : filesAny.puzzleImage) === null || _b === void 0 ? void 0 : _b[0]) ||
-            ((_c = filesAny === null || filesAny === void 0 ? void 0 : filesAny.originalImage) === null || _c === void 0 ? void 0 : _c[0]);
-        if (!uploadedFile)
-            return next(new ErrorHandler_1.default("Missing image", 400));
+        // Validate gameType field
+        const campaignGameType = gameType || "puzzle";
+        if (campaignGameType !== "puzzle" && campaignGameType !== "wordHunt") {
+            return next(new ErrorHandler_1.default('gameType must be either "puzzle" or "wordHunt"', 400));
+        }
+        // For wordHunt games, validate words array
+        if (campaignGameType === "wordHunt") {
+            if (!words || !Array.isArray(words) || words.length === 0) {
+                return next(new ErrorHandler_1.default("words array is required for wordHunt games and must contain at least one word", 400));
+            }
+        }
+        // Get brand profile (no restriction on number of campaigns)
+        const brand = yield brand_model_1.default.findOne({ userId: brandUser._id });
+        if (!brand) {
+            return next(new ErrorHandler_1.default("Brand profile not found", 404));
+        }
+        // multer stores single-file upload in req.file
+        const uploadedFile = req.file;
+        if (!uploadedFile) {
+            return next(new ErrorHandler_1.default('Missing image file. Please upload using field name "image"', 400));
+        }
         // use a single timestamp so both stored names are related
         const now = Date.now();
         const puzzleName = `puzzles/${now}-puzzle-${uploadedFile.originalname}`;
@@ -61,7 +74,7 @@ exports.createCampaign = (0, catchAsyncError_1.CatchAsyncError)((req, res, next)
         const originalUrl = yield uploadBuffer(uploadedFile, originalName);
         // parse questions (expected as JSON string or array)
         let parsedQuestions = [];
-        const rawQuestions = (_e = questions !== null && questions !== void 0 ? questions : (_d = req.body) === null || _d === void 0 ? void 0 : _d.questions) !== null && _e !== void 0 ? _e : (_f = req.body) === null || _f === void 0 ? void 0 : _f.question;
+        const rawQuestions = (_b = questions !== null && questions !== void 0 ? questions : (_a = req.body) === null || _a === void 0 ? void 0 : _a.questions) !== null && _b !== void 0 ? _b : (_c = req.body) === null || _c === void 0 ? void 0 : _c.question;
         const tryParse = (val) => {
             try {
                 return JSON.parse(val);
@@ -135,16 +148,23 @@ exports.createCampaign = (0, catchAsyncError_1.CatchAsyncError)((req, res, next)
         if (timeLimitVal === null || timeLimitVal === undefined) {
             return next(new ErrorHandler_1.default("timeLimit (hours) is required and must be a number", 400));
         }
-        const campaign = yield puzzleCampaign_model_1.default.create({
+        // Prepare campaign data
+        const campaignData = {
             brandId: brandUser._id,
+            gameType: campaignGameType,
             title: title.trim(),
             description: description.trim(),
             puzzleImageUrl: puzzleUrl,
             originalImageUrl: originalUrl,
             questions: parsedQuestions,
             timeLimit: timeLimitVal,
-        });
-        // update brand campaigns list
+        };
+        // For wordHunt games, add words array
+        if (campaignGameType === "wordHunt" && words) {
+            campaignData.words = words;
+        }
+        const campaign = yield puzzleCampaign_model_1.default.create(campaignData);
+        // Update brand campaigns list (no restrictions on number of campaigns)
         yield brand_model_1.default.findOneAndUpdate({ userId: brandUser._id }, { $push: { campaigns: campaign._id } });
         res.status(201).json({ success: true, campaign });
     }

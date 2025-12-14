@@ -4,24 +4,30 @@ import ErrorHandler from "../utils/ErrorHandler";
 import PuzzleAttemptModel from "../models/puzzleAttempt.model";
 import LeaderboardModel from "../models/leaderboard.model";
 
-// compute daily leaderboard (for today)
-export const getDailyLeaderboard = CatchAsyncError(
+// Get current week's leaderboard
+export const getWeeklyLeaderboard = CatchAsyncError(
   async (req: Request, res: Response, next: NextFunction) => {
     try {
-      const today = new Date();
-      const start = new Date(
-        today.getFullYear(),
-        today.getMonth(),
-        today.getDate()
-      );
-      const end = new Date(start.getTime() + 24 * 60 * 60 * 1000);
+      const now = new Date();
 
-      // count firstTimeSolved attempts that occurred today grouped by user
+      // Calculate current week's start (Monday) and end (Sunday)
+      const dayOfWeek = now.getDay();
+      const daysFromMonday = dayOfWeek === 0 ? 6 : dayOfWeek - 1; // Sunday is 0, Monday is 1
+
+      const weekStart = new Date(
+        now.getFullYear(),
+        now.getMonth(),
+        now.getDate() - daysFromMonday
+      );
+      const weekEnd = new Date(weekStart);
+      weekEnd.setDate(weekEnd.getDate() + 6); // Sunday
+
+      // count firstTimeSolved attempts that occurred this week grouped by user
       const agg = await PuzzleAttemptModel.aggregate([
         {
           $match: {
             firstTimeSolved: true,
-            timestamp: { $gte: start, $lt: end },
+            timestamp: { $gte: weekStart, $lte: weekEnd },
           },
         },
         {
@@ -41,31 +47,64 @@ export const getDailyLeaderboard = CatchAsyncError(
         points: a.points,
       }));
 
-      // upsert leaderboard document for today
-      const dateKey = start.toISOString().slice(0, 10);
+      // Create week key
+      const weekKey = `${weekStart.toISOString().slice(0, 10)}_to_${weekEnd.toISOString().slice(0, 10)}`;
+
+      // upsert leaderboard document for this week
       await LeaderboardModel.findOneAndUpdate(
-        { type: "daily", date: dateKey },
-        { type: "daily", date: dateKey, entries },
+        { type: "weekly", date: weekKey },
+        { type: "weekly", date: weekKey, entries },
         { upsert: true }
       );
 
-      res.status(200).json({ success: true, entries });
+      res.status(200).json({
+        success: true,
+        leaderboard: {
+          type: "weekly",
+          weekStart: weekStart.toISOString().slice(0, 10),
+          weekEnd: weekEnd.toISOString().slice(0, 10),
+          totalPlayers: entries.length,
+          entries,
+        },
+      });
     } catch (error: any) {
       return next(new ErrorHandler(error.message, 400));
     }
   }
 );
 
-export const getInstantLeaderboard = CatchAsyncError(
+// Get leaderboard for a specific week
+export const getLeaderboardByWeek = CatchAsyncError(
   async (req: Request, res: Response, next: NextFunction) => {
     try {
-      const { eventId } = req.params;
+      const { weekKey } = req.params; // Format: "2025-01-06_to_2025-01-12"
+
       const board = await LeaderboardModel.findOne({
-        type: "instant",
-        instantEventId: eventId,
+        type: "weekly",
+        date: weekKey,
       });
-      if (!board) return res.status(200).json({ success: true, entries: [] });
-      res.status(200).json({ success: true, entries: board.entries });
+
+      if (!board) {
+        return res.status(200).json({
+          success: true,
+          leaderboard: {
+            type: "weekly",
+            weekKey,
+            totalPlayers: 0,
+            entries: [],
+          },
+        });
+      }
+
+      res.status(200).json({
+        success: true,
+        leaderboard: {
+          type: "weekly",
+          weekKey,
+          totalPlayers: board.entries.length,
+          entries: board.entries,
+        },
+      });
     } catch (error: any) {
       return next(new ErrorHandler(error.message, 400));
     }
