@@ -282,3 +282,231 @@ export const getUserInfo = CatchAsyncError(
     }
   }
 );
+
+// Get gamer profile with full analytics
+export const getGamerProfile = CatchAsyncError(
+  async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const userId = req.user?._id as string;
+
+      if (!req.user || req.user.role !== "gamer") {
+        return next(new ErrorHandler("Access denied. Gamer profile only.", 403));
+      }
+
+      const user = await userModel.findById(userId).select("-password").lean();
+
+      if (!user) {
+        return next(new ErrorHandler("User not found", 404));
+      }
+
+      res.status(200).json({
+        success: true,
+        profile: {
+          _id: user._id,
+          name: user.name,
+          email: user.email,
+          avatar: user.avatar,
+          role: user.role,
+          isVerified: user.isVerified,
+          analytics: user.analytics,
+          puzzlesSolved: user.puzzlesSolved,
+          createdAt: (user as any).createdAt,
+          updatedAt: (user as any).updatedAt,
+        },
+      });
+    } catch (error: any) {
+      return next(new ErrorHandler(error.message, 400));
+    }
+  }
+);
+
+// Get brand profile with brand details and campaigns
+export const getBrandProfile = CatchAsyncError(
+  async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const userId = req.user?._id as string;
+
+      if (!req.user || req.user.role !== "brand") {
+        return next(new ErrorHandler("Access denied. Brand profile only.", 403));
+      }
+
+      const user = await userModel.findById(userId).select("-password").lean();
+
+      if (!user) {
+        return next(new ErrorHandler("User not found", 404));
+      }
+
+      // Get brand details
+      const BrandModel = require("../models/brand.model").default;
+      const brandProfile = await BrandModel.findOne({ userId }).lean();
+
+      // Get campaigns
+      const PuzzleCampaignModel = require("../models/puzzleCampaign.model").default;
+      const campaigns = await PuzzleCampaignModel.find({
+        brandId: userId,
+      })
+        .select("_id title description gameType puzzleImageUrl timeLimit createdAt")
+        .lean();
+
+      res.status(200).json({
+        success: true,
+        profile: {
+          _id: user._id,
+          name: user.name,
+          email: user.email,
+          avatar: user.avatar,
+          role: user.role,
+          companyName: user.companyName,
+          isVerified: user.isVerified,
+          createdAt: (user as any).createdAt,
+          updatedAt: (user as any).updatedAt,
+          brandDetails: brandProfile
+            ? {
+                companyEmail: brandProfile.companyEmail,
+                companyName: brandProfile.companyName,
+                verified: brandProfile.verified,
+                totalCampaigns: campaigns.length,
+              }
+            : null,
+          campaigns,
+        },
+      });
+    } catch (error: any) {
+      return next(new ErrorHandler(error.message, 400));
+    }
+  }
+);
+
+// Update gamer profile
+export const updateGamerProfile = CatchAsyncError(
+  async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const userId = req.user?._id as string;
+
+      if (!req.user || req.user.role !== "gamer") {
+        return next(new ErrorHandler("Access denied. Gamer profile only.", 403));
+      }
+
+      const { name, avatar } = req.body;
+
+      // Build update object with only provided fields
+      const updateData: any = {};
+      if (name && typeof name === "string" && name.trim() !== "") {
+        updateData.name = name.trim();
+      }
+      if (avatar && typeof avatar === "string") {
+        updateData.avatar = avatar;
+      }
+
+      // Check if there's anything to update
+      if (Object.keys(updateData).length === 0) {
+        return next(new ErrorHandler("No valid fields provided for update", 400));
+      }
+
+      const updatedUser = await userModel
+        .findByIdAndUpdate(userId, updateData, { new: true })
+        .select("-password");
+
+      if (!updatedUser) {
+        return next(new ErrorHandler("User not found", 404));
+      }
+
+      // Update redis cache if exists
+      try {
+        await redis.set(userId, JSON.stringify(updatedUser));
+      } catch (redisErr) {
+        console.error("Redis update error:", redisErr);
+      }
+
+      res.status(200).json({
+        success: true,
+        message: "Profile updated successfully",
+        profile: {
+          _id: updatedUser._id,
+          name: updatedUser.name,
+          email: updatedUser.email,
+          avatar: updatedUser.avatar,
+          role: updatedUser.role,
+          isVerified: updatedUser.isVerified,
+          analytics: updatedUser.analytics,
+          puzzlesSolved: updatedUser.puzzlesSolved,
+        },
+      });
+    } catch (error: any) {
+      return next(new ErrorHandler(error.message, 400));
+    }
+  }
+);
+
+// Update brand profile
+export const updateBrandProfile = CatchAsyncError(
+  async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const userId = req.user?._id as string;
+
+      if (!req.user || req.user.role !== "brand") {
+        return next(new ErrorHandler("Access denied. Brand profile only.", 403));
+      }
+
+      const { name, avatar, companyName } = req.body;
+
+      // Build update object for user model with only provided fields
+      const userUpdateData: any = {};
+      if (name && typeof name === "string" && name.trim() !== "") {
+        userUpdateData.name = name.trim();
+      }
+      if (avatar && typeof avatar === "string") {
+        userUpdateData.avatar = avatar;
+      }
+      if (companyName && typeof companyName === "string" && companyName.trim() !== "") {
+        userUpdateData.companyName = companyName.trim();
+      }
+
+      // Check if there's anything to update
+      if (Object.keys(userUpdateData).length === 0) {
+        return next(new ErrorHandler("No valid fields provided for update", 400));
+      }
+
+      // Update user model
+      const updatedUser = await userModel
+        .findByIdAndUpdate(userId, userUpdateData, { new: true })
+        .select("-password");
+
+      if (!updatedUser) {
+        return next(new ErrorHandler("User not found", 404));
+      }
+
+      // If companyName is updated, also update brand profile
+      if (companyName) {
+        const BrandModel = require("../models/brand.model").default;
+        await BrandModel.findOneAndUpdate(
+          { userId },
+          { companyName: companyName.trim() }
+        );
+      }
+
+      // Update redis cache if exists
+      try {
+        await redis.set(userId, JSON.stringify(updatedUser));
+      } catch (redisErr) {
+        console.error("Redis update error:", redisErr);
+      }
+
+      res.status(200).json({
+        success: true,
+        message: "Profile updated successfully",
+        profile: {
+          _id: updatedUser._id,
+          name: updatedUser.name,
+          email: updatedUser.email,
+          avatar: updatedUser.avatar,
+          role: updatedUser.role,
+          companyName: updatedUser.companyName,
+          isVerified: updatedUser.isVerified,
+        },
+      });
+    } catch (error: any) {
+      return next(new ErrorHandler(error.message, 400));
+    }
+  }
+);

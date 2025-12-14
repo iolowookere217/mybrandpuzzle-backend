@@ -12,6 +12,7 @@ const auth_route_1 = __importDefault(require("./routes/auth.route"));
 const puzzle_route_1 = __importDefault(require("./routes/puzzle.route"));
 const brand_route_1 = __importDefault(require("./routes/brand.route"));
 const leaderboard_route_1 = __importDefault(require("./routes/leaderboard.route"));
+const user_route_1 = __importDefault(require("./routes/user.route"));
 const app = (0, express_1.default)();
 exports.app = app;
 //body parser
@@ -23,7 +24,7 @@ app.use((0, cors_1.default)({
     origin: "*",
 }));
 // routes
-app.use("/api/v1", auth_route_1.default, puzzle_route_1.default, brand_route_1.default, leaderboard_route_1.default);
+app.use("/api/v1", auth_route_1.default, puzzle_route_1.default, brand_route_1.default, leaderboard_route_1.default, user_route_1.default);
 //testing api
 app.use("/test", (req, res) => {
     res.status(200).json({

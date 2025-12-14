@@ -12,7 +12,7 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.getUserInfo = exports.updateAccessToken = exports.logoutUser = exports.loginUser = exports.activateUser = exports.createActivationToken = exports.registerUser = void 0;
+exports.updateBrandProfile = exports.updateGamerProfile = exports.getBrandProfile = exports.getGamerProfile = exports.getUserInfo = exports.updateAccessToken = exports.logoutUser = exports.loginUser = exports.activateUser = exports.createActivationToken = exports.registerUser = void 0;
 const user_model_1 = __importDefault(require("../models/user.model"));
 const ErrorHandler_1 = __importDefault(require("../utils/ErrorHandler"));
 const catchAsyncError_1 = require("../middlewares/catchAsyncError");
@@ -191,6 +191,202 @@ exports.getUserInfo = (0, catchAsyncError_1.CatchAsyncError)((req, res, next) =>
                 user,
             });
         }
+    }
+    catch (error) {
+        return next(new ErrorHandler_1.default(error.message, 400));
+    }
+}));
+// Get gamer profile with full analytics
+exports.getGamerProfile = (0, catchAsyncError_1.CatchAsyncError)((req, res, next) => __awaiter(void 0, void 0, void 0, function* () {
+    var _a;
+    try {
+        const userId = (_a = req.user) === null || _a === void 0 ? void 0 : _a._id;
+        if (!req.user || req.user.role !== "gamer") {
+            return next(new ErrorHandler_1.default("Access denied. Gamer profile only.", 403));
+        }
+        const user = yield user_model_1.default.findById(userId).select("-password").lean();
+        if (!user) {
+            return next(new ErrorHandler_1.default("User not found", 404));
+        }
+        res.status(200).json({
+            success: true,
+            profile: {
+                _id: user._id,
+                name: user.name,
+                email: user.email,
+                avatar: user.avatar,
+                role: user.role,
+                isVerified: user.isVerified,
+                analytics: user.analytics,
+                puzzlesSolved: user.puzzlesSolved,
+                createdAt: user.createdAt,
+                updatedAt: user.updatedAt,
+            },
+        });
+    }
+    catch (error) {
+        return next(new ErrorHandler_1.default(error.message, 400));
+    }
+}));
+// Get brand profile with brand details and campaigns
+exports.getBrandProfile = (0, catchAsyncError_1.CatchAsyncError)((req, res, next) => __awaiter(void 0, void 0, void 0, function* () {
+    var _a;
+    try {
+        const userId = (_a = req.user) === null || _a === void 0 ? void 0 : _a._id;
+        if (!req.user || req.user.role !== "brand") {
+            return next(new ErrorHandler_1.default("Access denied. Brand profile only.", 403));
+        }
+        const user = yield user_model_1.default.findById(userId).select("-password").lean();
+        if (!user) {
+            return next(new ErrorHandler_1.default("User not found", 404));
+        }
+        // Get brand details
+        const BrandModel = require("../models/brand.model").default;
+        const brandProfile = yield BrandModel.findOne({ userId }).lean();
+        // Get campaigns
+        const PuzzleCampaignModel = require("../models/puzzleCampaign.model").default;
+        const campaigns = yield PuzzleCampaignModel.find({
+            brandId: userId,
+        })
+            .select("_id title description gameType puzzleImageUrl timeLimit createdAt")
+            .lean();
+        res.status(200).json({
+            success: true,
+            profile: {
+                _id: user._id,
+                name: user.name,
+                email: user.email,
+                avatar: user.avatar,
+                role: user.role,
+                companyName: user.companyName,
+                isVerified: user.isVerified,
+                createdAt: user.createdAt,
+                updatedAt: user.updatedAt,
+                brandDetails: brandProfile
+                    ? {
+                        companyEmail: brandProfile.companyEmail,
+                        companyName: brandProfile.companyName,
+                        verified: brandProfile.verified,
+                        totalCampaigns: campaigns.length,
+                    }
+                    : null,
+                campaigns,
+            },
+        });
+    }
+    catch (error) {
+        return next(new ErrorHandler_1.default(error.message, 400));
+    }
+}));
+// Update gamer profile
+exports.updateGamerProfile = (0, catchAsyncError_1.CatchAsyncError)((req, res, next) => __awaiter(void 0, void 0, void 0, function* () {
+    var _a;
+    try {
+        const userId = (_a = req.user) === null || _a === void 0 ? void 0 : _a._id;
+        if (!req.user || req.user.role !== "gamer") {
+            return next(new ErrorHandler_1.default("Access denied. Gamer profile only.", 403));
+        }
+        const { name, avatar } = req.body;
+        // Build update object with only provided fields
+        const updateData = {};
+        if (name && typeof name === "string" && name.trim() !== "") {
+            updateData.name = name.trim();
+        }
+        if (avatar && typeof avatar === "string") {
+            updateData.avatar = avatar;
+        }
+        // Check if there's anything to update
+        if (Object.keys(updateData).length === 0) {
+            return next(new ErrorHandler_1.default("No valid fields provided for update", 400));
+        }
+        const updatedUser = yield user_model_1.default
+            .findByIdAndUpdate(userId, updateData, { new: true })
+            .select("-password");
+        if (!updatedUser) {
+            return next(new ErrorHandler_1.default("User not found", 404));
+        }
+        // Update redis cache if exists
+        try {
+            yield redis_1.redis.set(userId, JSON.stringify(updatedUser));
+        }
+        catch (redisErr) {
+            console.error("Redis update error:", redisErr);
+        }
+        res.status(200).json({
+            success: true,
+            message: "Profile updated successfully",
+            profile: {
+                _id: updatedUser._id,
+                name: updatedUser.name,
+                email: updatedUser.email,
+                avatar: updatedUser.avatar,
+                role: updatedUser.role,
+                isVerified: updatedUser.isVerified,
+                analytics: updatedUser.analytics,
+                puzzlesSolved: updatedUser.puzzlesSolved,
+            },
+        });
+    }
+    catch (error) {
+        return next(new ErrorHandler_1.default(error.message, 400));
+    }
+}));
+// Update brand profile
+exports.updateBrandProfile = (0, catchAsyncError_1.CatchAsyncError)((req, res, next) => __awaiter(void 0, void 0, void 0, function* () {
+    var _a;
+    try {
+        const userId = (_a = req.user) === null || _a === void 0 ? void 0 : _a._id;
+        if (!req.user || req.user.role !== "brand") {
+            return next(new ErrorHandler_1.default("Access denied. Brand profile only.", 403));
+        }
+        const { name, avatar, companyName } = req.body;
+        // Build update object for user model with only provided fields
+        const userUpdateData = {};
+        if (name && typeof name === "string" && name.trim() !== "") {
+            userUpdateData.name = name.trim();
+        }
+        if (avatar && typeof avatar === "string") {
+            userUpdateData.avatar = avatar;
+        }
+        if (companyName && typeof companyName === "string" && companyName.trim() !== "") {
+            userUpdateData.companyName = companyName.trim();
+        }
+        // Check if there's anything to update
+        if (Object.keys(userUpdateData).length === 0) {
+            return next(new ErrorHandler_1.default("No valid fields provided for update", 400));
+        }
+        // Update user model
+        const updatedUser = yield user_model_1.default
+            .findByIdAndUpdate(userId, userUpdateData, { new: true })
+            .select("-password");
+        if (!updatedUser) {
+            return next(new ErrorHandler_1.default("User not found", 404));
+        }
+        // If companyName is updated, also update brand profile
+        if (companyName) {
+            const BrandModel = require("../models/brand.model").default;
+            yield BrandModel.findOneAndUpdate({ userId }, { companyName: companyName.trim() });
+        }
+        // Update redis cache if exists
+        try {
+            yield redis_1.redis.set(userId, JSON.stringify(updatedUser));
+        }
+        catch (redisErr) {
+            console.error("Redis update error:", redisErr);
+        }
+        res.status(200).json({
+            success: true,
+            message: "Profile updated successfully",
+            profile: {
+                _id: updatedUser._id,
+                name: updatedUser.name,
+                email: updatedUser.email,
+                avatar: updatedUser.avatar,
+                role: updatedUser.role,
+                companyName: updatedUser.companyName,
+                isVerified: updatedUser.isVerified,
+            },
+        });
     }
     catch (error) {
         return next(new ErrorHandler_1.default(error.message, 400));

@@ -6,6 +6,7 @@ import authRouter from "./routes/auth.route";
 import puzzleRouter from "./routes/puzzle.route";
 import brandRouter from "./routes/brand.route";
 import leaderboardRouter from "./routes/leaderboard.route";
+import userRouter from "./routes/user.route";
 
 const app = express();
 
@@ -28,7 +29,8 @@ app.use(
   authRouter,
   puzzleRouter,
   brandRouter,
-  leaderboardRouter
+  leaderboardRouter,
+  userRouter
 );
 
 //testing api
