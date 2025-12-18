@@ -26,6 +26,7 @@ const path_1 = __importDefault(require("path"));
 const ejs_1 = __importDefault(require("ejs"));
 const sendEmail_1 = __importDefault(require("../utils/sendEmail"));
 const user_controller_1 = require("./user.controller");
+const userHelpers_1 = require("../utils/userHelpers");
 // Google OAuth sign-in (client provides profile info or idToken)
 exports.googleAuth = (0, catchAsyncError_1.CatchAsyncError)((req, res, next) => __awaiter(void 0, void 0, void 0, function* () {
     try {
@@ -50,10 +51,18 @@ exports.googleAuth = (0, catchAsyncError_1.CatchAsyncError)((req, res, next) => 
         }
         let user = yield user_model_1.default.findOne({ email: profile.email });
         if (!user) {
+            const fullName = profile.name || profile.email.split("@")[0];
+            const nameParts = fullName.split(" ");
+            const firstName = nameParts[0] || fullName;
+            const lastName = nameParts.slice(1).join(" ") || "";
+            const username = yield (0, userHelpers_1.generateUsername)(profile.email);
+            const avatar = profile.picture || (0, userHelpers_1.generateAvatar)();
             user = yield user_model_1.default.create({
-                name: profile.name || profile.email.split("@")[0],
+                firstName,
+                lastName,
+                username,
                 email: profile.email,
-                avatar: profile.picture,
+                avatar,
                 googleId: profile.uid,
                 role: "gamer",
                 isVerified: true,
@@ -75,29 +84,35 @@ exports.googleAuth = (0, catchAsyncError_1.CatchAsyncError)((req, res, next) => 
 // Gamer email signup (email + password registration)
 exports.registerGamer = (0, catchAsyncError_1.CatchAsyncError)((req, res, next) => __awaiter(void 0, void 0, void 0, function* () {
     try {
-        const { name, email, password } = req.body;
-        if (!email || !password || !name) {
-            return next(new ErrorHandler_1.default("Missing required fields: name, email, password", 400));
+        const { firstName, lastName, email, password } = req.body;
+        if (!email || !password || !firstName) {
+            return next(new ErrorHandler_1.default("Missing required fields: firstName, email, password", 400));
         }
         const existing = yield user_model_1.default.findOne({ email });
         if (existing)
             return next(new ErrorHandler_1.default("Email already exists", 400));
+        const username = yield (0, userHelpers_1.generateUsername)(email);
+        const avatar = (0, userHelpers_1.generateAvatar)();
         const user = yield user_model_1.default.create({
-            name,
+            firstName,
+            lastName: lastName || "",
+            username,
             email,
             password,
+            avatar,
             role: "gamer",
             isVerified: false,
         });
         // create activation token and email the gamer
         try {
             const activationToken = (0, user_controller_1.createActivationToken)({
-                name,
+                firstName,
+                lastName,
                 email,
                 password,
             });
             const activationCode = activationToken.activationCode;
-            const data = { user: { name }, activationCode };
+            const data = { user: { name: firstName }, activationCode };
             yield ejs_1.default.renderFile(path_1.default.join(__dirname, "../mails/activation-mail.ejs"), data);
             yield (0, sendEmail_1.default)({
                 email,
@@ -132,7 +147,7 @@ exports.activateGamer = (0, catchAsyncError_1.CatchAsyncError)((req, res, next) 
             return next(new ErrorHandler_1.default("Invalid activation token", 400));
         if (decoded.activationCode !== activation_code)
             return next(new ErrorHandler_1.default("Invalid activation code", 400));
-        const { name, email, password } = decoded.user;
+        const { firstName, lastName, email, password } = decoded.user;
         // check if user exists
         const exist = yield user_model_1.default.findOne({ email });
         if (exist) {
@@ -148,10 +163,15 @@ exports.activateGamer = (0, catchAsyncError_1.CatchAsyncError)((req, res, next) 
             return;
         }
         // create new gamer account
+        const username = yield (0, userHelpers_1.generateUsername)(email);
+        const avatar = (0, userHelpers_1.generateAvatar)();
         const user = yield user_model_1.default.create({
-            name,
+            firstName,
+            lastName: lastName || "",
+            username,
             email,
             password,
+            avatar,
             role: "gamer",
             isVerified: true,
         });
@@ -315,12 +335,13 @@ exports.resendGamerActivation = (0, catchAsyncError_1.CatchAsyncError)((req, res
         }
         // Create new activation token
         const activationToken = (0, user_controller_1.createActivationToken)({
-            name: user.name,
+            firstName: user.firstName,
+            lastName: user.lastName,
             email: user.email,
             password: user.password, // hashed password from DB
         });
         const activationCode = activationToken.activationCode;
-        const data = { user: { name: user.name }, activationCode };
+        const data = { user: { name: user.firstName }, activationCode };
         // Send activation email
         yield (0, sendEmail_1.default)({
             email: user.email,

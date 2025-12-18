@@ -12,13 +12,14 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.getCampaignAnalytics = exports.createCampaign = void 0;
+exports.getAllBrands = exports.getCampaignAnalytics = exports.createCampaign = void 0;
 const catchAsyncError_1 = require("../middlewares/catchAsyncError");
 const ErrorHandler_1 = __importDefault(require("../utils/ErrorHandler"));
 const puzzleCampaign_model_1 = __importDefault(require("../models/puzzleCampaign.model"));
 const brand_model_1 = __importDefault(require("../models/brand.model"));
 const firebaseConfig_1 = require("../firebaseConfig");
 const puzzleAttempt_model_1 = __importDefault(require("../models/puzzleAttempt.model"));
+const user_model_1 = __importDefault(require("../models/user.model"));
 // Create a puzzle campaign (brands only). Expects multipart upload with one file: "image" (used for both scrambled and original)
 exports.createCampaign = (0, catchAsyncError_1.CatchAsyncError)((req, res, next) => __awaiter(void 0, void 0, void 0, function* () {
     var _a, _b, _c;
@@ -37,14 +38,31 @@ exports.createCampaign = (0, catchAsyncError_1.CatchAsyncError)((req, res, next)
             return next(new ErrorHandler_1.default("description is required and must be a non-empty string", 400));
         }
         // Validate gameType field
-        const campaignGameType = gameType || "puzzle";
-        if (campaignGameType !== "puzzle" && campaignGameType !== "wordHunt") {
-            return next(new ErrorHandler_1.default('gameType must be either "puzzle" or "wordHunt"', 400));
+        const validGameTypes = ["sliding_puzzle", "card_matching", "whack_a_mole", "word_hunt"];
+        const campaignGameType = gameType || "sliding_puzzle";
+        if (!validGameTypes.includes(campaignGameType)) {
+            return next(new ErrorHandler_1.default('gameType must be one of: sliding_puzzle, card_matching, whack_a_mole, word_hunt', 400));
         }
-        // For wordHunt games, validate words array
-        if (campaignGameType === "wordHunt") {
-            if (!words || !Array.isArray(words) || words.length === 0) {
-                return next(new ErrorHandler_1.default("words array is required for wordHunt games and must contain at least one word", 400));
+        // Parse words array if it's a string (from form-data)
+        let parsedWords = [];
+        if (words) {
+            if (typeof words === "string") {
+                try {
+                    parsedWords = JSON.parse(words);
+                }
+                catch (_d) {
+                    // If parsing fails, try splitting by comma
+                    parsedWords = words.split(",").map((w) => w.trim()).filter((w) => w.length > 0);
+                }
+            }
+            else if (Array.isArray(words)) {
+                parsedWords = words;
+            }
+        }
+        // For word_hunt games, validate words array
+        if (campaignGameType === "word_hunt") {
+            if (!parsedWords || parsedWords.length === 0) {
+                return next(new ErrorHandler_1.default("words array is required for word_hunt games and must contain at least one word", 400));
             }
         }
         // Get brand profile (no restriction on number of campaigns)
@@ -159,9 +177,9 @@ exports.createCampaign = (0, catchAsyncError_1.CatchAsyncError)((req, res, next)
             questions: parsedQuestions,
             timeLimit: timeLimitVal,
         };
-        // For wordHunt games, add words array
-        if (campaignGameType === "wordHunt" && words) {
-            campaignData.words = words;
+        // For word_hunt games, add words array
+        if (campaignGameType === "word_hunt" && parsedWords.length > 0) {
+            campaignData.words = parsedWords;
         }
         const campaign = yield puzzleCampaign_model_1.default.create(campaignData);
         // Update brand campaigns list (no restrictions on number of campaigns)
@@ -218,6 +236,42 @@ exports.getCampaignAnalytics = (0, catchAsyncError_1.CatchAsyncError)((req, res,
             });
         }
         res.status(200).json({ success: true, campaigns: campaignsAnalytics });
+    }
+    catch (error) {
+        return next(new ErrorHandler_1.default(error.message, 400));
+    }
+}));
+// Get all brands
+exports.getAllBrands = (0, catchAsyncError_1.CatchAsyncError)((req, res, next) => __awaiter(void 0, void 0, void 0, function* () {
+    try {
+        // Find all users with role 'brand'
+        const brandUsers = yield user_model_1.default.find({ role: "brand" })
+            .select("_id name email companyName avatar isVerified createdAt")
+            .lean();
+        // Get brand details for each brand user
+        const brands = yield Promise.all(brandUsers.map((brandUser) => __awaiter(void 0, void 0, void 0, function* () {
+            const brandProfile = yield brand_model_1.default.findOne({ userId: brandUser._id }).lean();
+            const campaignCount = yield puzzleCampaign_model_1.default.countDocuments({
+                brandId: brandUser._id,
+            });
+            return {
+                _id: brandUser._id,
+                name: brandUser.name,
+                email: brandUser.email,
+                companyName: brandUser.companyName,
+                avatar: brandUser.avatar,
+                isVerified: brandUser.isVerified,
+                createdAt: brandUser.createdAt,
+                brandDetails: brandProfile
+                    ? {
+                        companyEmail: brandProfile.companyEmail,
+                        verified: brandProfile.verified,
+                        totalCampaigns: campaignCount,
+                    }
+                    : null,
+            };
+        })));
+        res.status(200).json({ success: true, brands });
     }
     catch (error) {
         return next(new ErrorHandler_1.default(error.message, 400));

@@ -212,7 +212,9 @@ exports.getGamerProfile = (0, catchAsyncError_1.CatchAsyncError)((req, res, next
             success: true,
             profile: {
                 _id: user._id,
-                name: user.name,
+                firstName: user.firstName,
+                lastName: user.lastName,
+                username: user.username,
                 email: user.email,
                 avatar: user.avatar,
                 role: user.role,
@@ -243,13 +245,11 @@ exports.getBrandProfile = (0, catchAsyncError_1.CatchAsyncError)((req, res, next
         // Get brand details
         const BrandModel = require("../models/brand.model").default;
         const brandProfile = yield BrandModel.findOne({ userId }).lean();
-        // Get campaigns
+        // Get campaign count only (not the full list for better performance)
         const PuzzleCampaignModel = require("../models/puzzleCampaign.model").default;
-        const campaigns = yield PuzzleCampaignModel.find({
+        const totalCampaigns = yield PuzzleCampaignModel.countDocuments({
             brandId: userId,
-        })
-            .select("_id title description gameType puzzleImageUrl timeLimit createdAt")
-            .lean();
+        });
         res.status(200).json({
             success: true,
             profile: {
@@ -267,10 +267,9 @@ exports.getBrandProfile = (0, catchAsyncError_1.CatchAsyncError)((req, res, next
                         companyEmail: brandProfile.companyEmail,
                         companyName: brandProfile.companyName,
                         verified: brandProfile.verified,
-                        totalCampaigns: campaigns.length,
+                        totalCampaigns,
                     }
                     : null,
-                campaigns,
             },
         });
     }
@@ -286,11 +285,14 @@ exports.updateGamerProfile = (0, catchAsyncError_1.CatchAsyncError)((req, res, n
         if (!req.user || req.user.role !== "gamer") {
             return next(new ErrorHandler_1.default("Access denied. Gamer profile only.", 403));
         }
-        const { name, avatar } = req.body;
+        const { firstName, lastName, avatar } = req.body;
         // Build update object with only provided fields
         const updateData = {};
-        if (name && typeof name === "string" && name.trim() !== "") {
-            updateData.name = name.trim();
+        if (firstName && typeof firstName === "string" && firstName.trim() !== "") {
+            updateData.firstName = firstName.trim();
+        }
+        if (lastName !== undefined && typeof lastName === "string") {
+            updateData.lastName = lastName.trim();
         }
         if (avatar && typeof avatar === "string") {
             updateData.avatar = avatar;
@@ -317,7 +319,9 @@ exports.updateGamerProfile = (0, catchAsyncError_1.CatchAsyncError)((req, res, n
             message: "Profile updated successfully",
             profile: {
                 _id: updatedUser._id,
-                name: updatedUser.name,
+                firstName: updatedUser.firstName,
+                lastName: updatedUser.lastName,
+                username: updatedUser.username,
                 email: updatedUser.email,
                 avatar: updatedUser.avatar,
                 role: updatedUser.role,

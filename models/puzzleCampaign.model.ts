@@ -8,13 +8,13 @@ export interface IQuestion {
 
 export interface IPuzzleCampaign extends Document {
   brandId: string;
-  gameType: "puzzle" | "wordHunt"; // game type: puzzle or word hunt
+  gameType: "sliding_puzzle" | "card_matching" | "whack_a_mole" | "word_hunt";
   title: string;
   description: string;
   puzzleImageUrl: string;
   originalImageUrl: string;
   questions: IQuestion[];
-  words?: string[]; // for wordHunt games only
+  words?: string[]; // for word_hunt games only
   timeLimit: number; // hours until campaign expires
   analytics: any;
 }
@@ -24,9 +24,9 @@ const puzzleCampaignSchema: Schema<IPuzzleCampaign> = new mongoose.Schema(
     brandId: { type: String, required: true },
     gameType: {
       type: String,
-      enum: ["puzzle", "wordHunt"],
+      enum: ["sliding_puzzle", "card_matching", "whack_a_mole", "word_hunt"],
       required: true,
-      default: "puzzle",
+      default: "sliding_puzzle",
     },
     title: { type: String, required: true },
     description: { type: String, required: true },
@@ -39,7 +39,7 @@ const puzzleCampaignSchema: Schema<IPuzzleCampaign> = new mongoose.Schema(
         correctIndex: { type: Number, required: true },
       },
     ],
-    words: [{ type: String }], // for wordHunt games
+    words: [{ type: String }], // for word_hunt games
     timeLimit: { type: Number, required: true },
     analytics: { type: Schema.Types.Mixed, default: {} },
   },

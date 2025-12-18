@@ -38,9 +38,9 @@ const puzzleCampaignSchema = new mongoose_1.default.Schema({
     brandId: { type: String, required: true },
     gameType: {
         type: String,
-        enum: ["puzzle", "wordHunt"],
+        enum: ["sliding_puzzle", "card_matching", "whack_a_mole", "word_hunt"],
         required: true,
-        default: "puzzle",
+        default: "sliding_puzzle",
     },
     title: { type: String, required: true },
     description: { type: String, required: true },
@@ -53,7 +53,7 @@ const puzzleCampaignSchema = new mongoose_1.default.Schema({
             correctIndex: { type: Number, required: true },
         },
     ],
-    words: [{ type: String }], // for wordHunt games
+    words: [{ type: String }], // for word_hunt games
     timeLimit: { type: Number, required: true },
     analytics: { type: mongoose_1.Schema.Types.Mixed, default: {} },
 }, { timestamps: true });

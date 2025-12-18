@@ -13,6 +13,7 @@ import path from "path";
 import ejs from "ejs";
 import sendMail from "../utils/sendEmail";
 import { createActivationToken } from "./user.controller";
+import { generateUsername, generateAvatar } from "../utils/userHelpers";
 
 // Google OAuth sign-in (client provides profile info or idToken)
 export const googleAuth = CatchAsyncError(
@@ -45,10 +46,20 @@ export const googleAuth = CatchAsyncError(
 
       let user = await UserModel.findOne({ email: profile.email });
       if (!user) {
+        const fullName = profile.name || profile.email.split("@")[0];
+        const nameParts = fullName.split(" ");
+        const firstName = nameParts[0] || fullName;
+        const lastName = nameParts.slice(1).join(" ") || "";
+
+        const username = await generateUsername(profile.email);
+        const avatar = profile.picture || generateAvatar();
+
         user = await UserModel.create({
-          name: profile.name || profile.email.split("@")[0],
+          firstName,
+          lastName,
+          username,
           email: profile.email,
-          avatar: profile.picture,
+          avatar,
           googleId: profile.uid,
           role: "gamer",
           isVerified: true,
@@ -72,11 +83,11 @@ export const googleAuth = CatchAsyncError(
 export const registerGamer = CatchAsyncError(
   async (req: Request, res: Response, next: NextFunction) => {
     try {
-      const { name, email, password } = req.body;
-      if (!email || !password || !name) {
+      const { firstName, lastName, email, password } = req.body;
+      if (!email || !password || !firstName) {
         return next(
           new ErrorHandler(
-            "Missing required fields: name, email, password",
+            "Missing required fields: firstName, email, password",
             400
           )
         );
@@ -85,10 +96,16 @@ export const registerGamer = CatchAsyncError(
       const existing = await UserModel.findOne({ email });
       if (existing) return next(new ErrorHandler("Email already exists", 400));
 
+      const username = await generateUsername(email);
+      const avatar = generateAvatar();
+
       const user = await UserModel.create({
-        name,
+        firstName,
+        lastName: lastName || "",
+        username,
         email,
         password,
+        avatar,
         role: "gamer",
         isVerified: false,
       });
@@ -96,12 +113,13 @@ export const registerGamer = CatchAsyncError(
       // create activation token and email the gamer
       try {
         const activationToken = createActivationToken({
-          name,
+          firstName,
+          lastName,
           email,
           password,
         });
         const activationCode = activationToken.activationCode;
-        const data = { user: { name }, activationCode };
+        const data = { user: { name: firstName }, activationCode };
         await ejs.renderFile(
           path.join(__dirname, "../mails/activation-mail.ejs"),
           data
@@ -147,7 +165,7 @@ export const activateGamer = CatchAsyncError(
       if (decoded.activationCode !== activation_code)
         return next(new ErrorHandler("Invalid activation code", 400));
 
-      const { name, email, password } = decoded.user;
+      const { firstName, lastName, email, password } = decoded.user;
 
       // check if user exists
       const exist = await UserModel.findOne({ email });
@@ -170,10 +188,16 @@ export const activateGamer = CatchAsyncError(
       }
 
       // create new gamer account
+      const username = await generateUsername(email);
+      const avatar = generateAvatar();
+
       const user = await UserModel.create({
-        name,
+        firstName,
+        lastName: lastName || "",
+        username,
         email,
         password,
+        avatar,
         role: "gamer",
         isVerified: true,
       });
@@ -379,13 +403,14 @@ export const resendGamerActivation = CatchAsyncError(
 
       // Create new activation token
       const activationToken = createActivationToken({
-        name: user.name,
+        firstName: user.firstName,
+        lastName: user.lastName,
         email: user.email,
         password: user.password, // hashed password from DB
       });
 
       const activationCode = activationToken.activationCode;
-      const data = { user: { name: user.name }, activationCode };
+      const data = { user: { name: user.firstName }, activationCode };
 
       // Send activation email
       await sendMail({

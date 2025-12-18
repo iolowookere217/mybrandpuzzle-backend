@@ -5,6 +5,7 @@ import PuzzleCampaignModel from "../models/puzzleCampaign.model";
 import BrandModel from "../models/brand.model";
 import { bucket } from "../firebaseConfig";
 import PuzzleAttemptModel from "../models/puzzleAttempt.model";
+import UserModel from "../models/user.model";
 
 // Create a puzzle campaign (brands only). Expects multipart upload with one file: "image" (used for both scrambled and original)
 export const createCampaign = CatchAsyncError(
@@ -39,19 +40,38 @@ export const createCampaign = CatchAsyncError(
       }
 
       // Validate gameType field
-      const campaignGameType = gameType || "puzzle";
-      if (campaignGameType !== "puzzle" && campaignGameType !== "wordHunt") {
+      const validGameTypes = ["sliding_puzzle", "card_matching", "whack_a_mole", "word_hunt"];
+      const campaignGameType = gameType || "sliding_puzzle";
+      if (!validGameTypes.includes(campaignGameType)) {
         return next(
-          new ErrorHandler('gameType must be either "puzzle" or "wordHunt"', 400)
+          new ErrorHandler(
+            'gameType must be one of: sliding_puzzle, card_matching, whack_a_mole, word_hunt',
+            400
+          )
         );
       }
 
-      // For wordHunt games, validate words array
-      if (campaignGameType === "wordHunt") {
-        if (!words || !Array.isArray(words) || words.length === 0) {
+      // Parse words array if it's a string (from form-data)
+      let parsedWords: string[] = [];
+      if (words) {
+        if (typeof words === "string") {
+          try {
+            parsedWords = JSON.parse(words);
+          } catch {
+            // If parsing fails, try splitting by comma
+            parsedWords = words.split(",").map((w) => w.trim()).filter((w) => w.length > 0);
+          }
+        } else if (Array.isArray(words)) {
+          parsedWords = words;
+        }
+      }
+
+      // For word_hunt games, validate words array
+      if (campaignGameType === "word_hunt") {
+        if (!parsedWords || parsedWords.length === 0) {
           return next(
             new ErrorHandler(
-              "words array is required for wordHunt games and must contain at least one word",
+              "words array is required for word_hunt games and must contain at least one word",
               400
             )
           );
@@ -198,9 +218,9 @@ export const createCampaign = CatchAsyncError(
         timeLimit: timeLimitVal,
       };
 
-      // For wordHunt games, add words array
-      if (campaignGameType === "wordHunt" && words) {
-        campaignData.words = words;
+      // For word_hunt games, add words array
+      if (campaignGameType === "word_hunt" && parsedWords.length > 0) {
+        campaignData.words = parsedWords;
       }
 
       const campaign = await PuzzleCampaignModel.create(campaignData);
@@ -276,6 +296,49 @@ export const getCampaignAnalytics = CatchAsyncError(
       }
 
       res.status(200).json({ success: true, campaigns: campaignsAnalytics });
+    } catch (error: any) {
+      return next(new ErrorHandler(error.message, 400));
+    }
+  }
+);
+
+// Get all brands
+export const getAllBrands = CatchAsyncError(
+  async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      // Find all users with role 'brand'
+      const brandUsers = await UserModel.find({ role: "brand" })
+        .select("_id name email companyName avatar isVerified createdAt")
+        .lean();
+
+      // Get brand details for each brand user
+      const brands = await Promise.all(
+        brandUsers.map(async (brandUser) => {
+          const brandProfile = await BrandModel.findOne({ userId: brandUser._id }).lean();
+          const campaignCount = await PuzzleCampaignModel.countDocuments({
+            brandId: brandUser._id,
+          });
+
+          return {
+            _id: brandUser._id,
+            name: brandUser.name,
+            email: brandUser.email,
+            companyName: brandUser.companyName,
+            avatar: brandUser.avatar,
+            isVerified: brandUser.isVerified,
+            createdAt: (brandUser as any).createdAt,
+            brandDetails: brandProfile
+              ? {
+                  companyEmail: brandProfile.companyEmail,
+                  verified: brandProfile.verified,
+                  totalCampaigns: campaignCount,
+                }
+              : null,
+          };
+        })
+      );
+
+      res.status(200).json({ success: true, brands });
     } catch (error: any) {
       return next(new ErrorHandler(error.message, 400));
     }

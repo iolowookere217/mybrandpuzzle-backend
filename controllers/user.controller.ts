@@ -303,7 +303,9 @@ export const getGamerProfile = CatchAsyncError(
         success: true,
         profile: {
           _id: user._id,
-          name: user.name,
+          firstName: user.firstName,
+          lastName: user.lastName,
+          username: user.username,
           email: user.email,
           avatar: user.avatar,
           role: user.role,
@@ -340,13 +342,11 @@ export const getBrandProfile = CatchAsyncError(
       const BrandModel = require("../models/brand.model").default;
       const brandProfile = await BrandModel.findOne({ userId }).lean();
 
-      // Get campaigns
+      // Get campaign count only (not the full list for better performance)
       const PuzzleCampaignModel = require("../models/puzzleCampaign.model").default;
-      const campaigns = await PuzzleCampaignModel.find({
+      const totalCampaigns = await PuzzleCampaignModel.countDocuments({
         brandId: userId,
-      })
-        .select("_id title description gameType puzzleImageUrl timeLimit createdAt")
-        .lean();
+      });
 
       res.status(200).json({
         success: true,
@@ -365,10 +365,9 @@ export const getBrandProfile = CatchAsyncError(
                 companyEmail: brandProfile.companyEmail,
                 companyName: brandProfile.companyName,
                 verified: brandProfile.verified,
-                totalCampaigns: campaigns.length,
+                totalCampaigns,
               }
             : null,
-          campaigns,
         },
       });
     } catch (error: any) {
@@ -387,12 +386,15 @@ export const updateGamerProfile = CatchAsyncError(
         return next(new ErrorHandler("Access denied. Gamer profile only.", 403));
       }
 
-      const { name, avatar } = req.body;
+      const { firstName, lastName, avatar } = req.body;
 
       // Build update object with only provided fields
       const updateData: any = {};
-      if (name && typeof name === "string" && name.trim() !== "") {
-        updateData.name = name.trim();
+      if (firstName && typeof firstName === "string" && firstName.trim() !== "") {
+        updateData.firstName = firstName.trim();
+      }
+      if (lastName !== undefined && typeof lastName === "string") {
+        updateData.lastName = lastName.trim();
       }
       if (avatar && typeof avatar === "string") {
         updateData.avatar = avatar;
@@ -423,7 +425,9 @@ export const updateGamerProfile = CatchAsyncError(
         message: "Profile updated successfully",
         profile: {
           _id: updatedUser._id,
-          name: updatedUser.name,
+          firstName: updatedUser.firstName,
+          lastName: updatedUser.lastName,
+          username: updatedUser.username,
           email: updatedUser.email,
           avatar: updatedUser.avatar,
           role: updatedUser.role,

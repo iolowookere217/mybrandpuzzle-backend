@@ -3,7 +3,7 @@ import cors from "cors";
 import cookieParser from "cookie-parser";
 import "dotenv/config";
 import authRouter from "./routes/auth.route";
-import puzzleRouter from "./routes/puzzle.route";
+import campaignRouter from "./routes/campaign.route";
 import brandRouter from "./routes/brand.route";
 import leaderboardRouter from "./routes/leaderboard.route";
 import userRouter from "./routes/user.route";
@@ -27,7 +27,7 @@ app.use(
 app.use(
   "/api/v1",
   authRouter,
-  puzzleRouter,
+  campaignRouter,
   brandRouter,
   leaderboardRouter,
   userRouter
