@@ -1,5 +1,6 @@
 import express from "express";
 import {
+  getActiveCampaigns,
   getAllCampaigns,
   getCampaignsByBrand,
   getCampaignById,
@@ -11,6 +12,9 @@ const router = express.Router();
 
 // Get all campaigns
 router.get("/campaigns", isAuthenticated, getAllCampaigns);
+
+// Get active campaigns only
+router.get("/campaigns/active", isAuthenticated, getActiveCampaigns);
 
 // Get campaigns by brand ID
 router.get("/campaigns/brand/:brandId", isAuthenticated, getCampaignsByBrand);

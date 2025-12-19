@@ -36,6 +36,7 @@ Object.defineProperty(exports, "__esModule", { value: true });
 const mongoose_1 = __importStar(require("mongoose"));
 const puzzleCampaignSchema = new mongoose_1.default.Schema({
     brandId: { type: String, required: true },
+    packageId: { type: String, required: true, index: true },
     gameType: {
         type: String,
         enum: ["sliding_puzzle", "card_matching", "whack_a_mole", "word_hunt"],
@@ -44,6 +45,7 @@ const puzzleCampaignSchema = new mongoose_1.default.Schema({
     },
     title: { type: String, required: true },
     description: { type: String, required: true },
+    brandUrl: { type: String, required: false },
     puzzleImageUrl: { type: String, required: true },
     originalImageUrl: { type: String, required: true },
     questions: [
@@ -55,11 +57,23 @@ const puzzleCampaignSchema = new mongoose_1.default.Schema({
     ],
     words: [{ type: String }], // for word_hunt games
     timeLimit: { type: Number, required: true },
+    status: {
+        type: String,
+        enum: ["active", "ended", "draft"],
+        default: "active",
+        required: true,
+    },
+    startDate: { type: Date, required: true },
+    endDate: { type: Date, required: true },
     analytics: { type: mongoose_1.Schema.Types.Mixed, default: {} },
 }, { timestamps: true });
 // index for quick analytics by brand
 puzzleCampaignSchema.index({ brandId: 1 });
 // index for querying by game type
 puzzleCampaignSchema.index({ gameType: 1 });
+// index for querying by status
+puzzleCampaignSchema.index({ status: 1 });
+// index for querying by end date (for auto-ending campaigns)
+puzzleCampaignSchema.index({ endDate: 1, status: 1 });
 const PuzzleCampaignModel = mongoose_1.default.model("PuzzleCampaign", puzzleCampaignSchema);
 exports.default = PuzzleCampaignModel;

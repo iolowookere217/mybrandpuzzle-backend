@@ -12,10 +12,11 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.startScheduler = void 0;
+exports.checkExpiredCampaigns = exports.startScheduler = void 0;
 const mongoose_1 = __importDefault(require("mongoose"));
 const leaderboard_model_1 = __importDefault(require("../models/leaderboard.model"));
 const puzzleAttempt_model_1 = __importDefault(require("../models/puzzleAttempt.model"));
+const puzzleCampaign_model_1 = __importDefault(require("../models/puzzleCampaign.model"));
 // Weekly leaderboard scheduler
 const startScheduler = () => {
     // Run once per day at midnight to check if we need to finalize the weekly leaderboard
@@ -61,6 +62,8 @@ const startScheduler = () => {
                 yield leaderboard_model_1.default.findOneAndUpdate({ type: "weekly", date: weekKey }, { type: "weekly", date: weekKey, entries }, { upsert: true });
                 console.log(`Created weekly leaderboard for week: ${weekKey}`);
             }
+            // Check and update expired campaigns
+            yield (0, exports.checkExpiredCampaigns)();
         }
         catch (err) {
             // eslint-disable-next-line no-console
@@ -69,3 +72,27 @@ const startScheduler = () => {
     }), checkInterval);
 };
 exports.startScheduler = startScheduler;
+// Check and mark expired campaigns as ended
+const checkExpiredCampaigns = () => __awaiter(void 0, void 0, void 0, function* () {
+    try {
+        // Skip if database is not connected
+        if (mongoose_1.default.connection.readyState !== 1) {
+            return;
+        }
+        const now = new Date();
+        // Find all active campaigns that have passed their end date
+        const result = yield puzzleCampaign_model_1.default.updateMany({
+            status: "active",
+            endDate: { $lt: now },
+        }, {
+            $set: { status: "ended" },
+        });
+        if (result.modifiedCount > 0) {
+            console.log(`✅ Marked ${result.modifiedCount} campaign(s) as ended`);
+        }
+    }
+    catch (error) {
+        console.error("Error checking expired campaigns:", error);
+    }
+});
+exports.checkExpiredCampaigns = checkExpiredCampaigns;

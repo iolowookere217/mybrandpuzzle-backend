@@ -93,26 +93,17 @@ exports.registerGamer = (0, catchAsyncError_1.CatchAsyncError)((req, res, next) 
             return next(new ErrorHandler_1.default("Email already exists", 400));
         const username = yield (0, userHelpers_1.generateUsername)(email);
         const avatar = (0, userHelpers_1.generateAvatar)();
-        const user = yield user_model_1.default.create({
+        // Create activation token BEFORE creating user
+        const activationToken = (0, user_controller_1.createActivationToken)({
             firstName,
-            lastName: lastName || "",
-            username,
+            lastName,
             email,
             password,
-            avatar,
-            role: "gamer",
-            isVerified: false,
         });
-        // create activation token and email the gamer
+        const activationCode = activationToken.activationCode;
+        const data = { user: { name: firstName }, activationCode };
+        // Try to send email first
         try {
-            const activationToken = (0, user_controller_1.createActivationToken)({
-                firstName,
-                lastName,
-                email,
-                password,
-            });
-            const activationCode = activationToken.activationCode;
-            const data = { user: { name: firstName }, activationCode };
             yield ejs_1.default.renderFile(path_1.default.join(__dirname, "../mails/activation-mail.ejs"), data);
             yield (0, sendEmail_1.default)({
                 email,
@@ -120,16 +111,27 @@ exports.registerGamer = (0, catchAsyncError_1.CatchAsyncError)((req, res, next) 
                 template: "activation-mail.ejs",
                 data,
             });
+            // Only create user AFTER email is successfully sent
+            const user = yield user_model_1.default.create({
+                firstName,
+                lastName: lastName || "",
+                username,
+                email,
+                password,
+                avatar,
+                role: "gamer",
+                isVerified: false,
+            });
             res.status(201).json({
                 success: true,
-                user,
+                message: "Registration successful! Please check your email to verify your account.",
                 activationToken: activationToken.token,
-                message: "Activation email sent. Please verify your email.",
             });
         }
         catch (mailErr) {
-            // If email fails, still return created user/token
-            (0, jwt_1.sendToken)(user, 201, res);
+            // If email fails, return error with details
+            console.error("Email sending failed:", mailErr);
+            return next(new ErrorHandler_1.default(`Registration failed: Unable to send verification email. Please check your email configuration. Error: ${mailErr.message}`, 500));
         }
     }
     catch (error) {
@@ -209,31 +211,17 @@ exports.registerBrand = (0, catchAsyncError_1.CatchAsyncError)((req, res, next) 
         const existing = yield user_model_1.default.findOne({ email });
         if (existing)
             return next(new ErrorHandler_1.default("Email already exists", 400));
-        const user = yield user_model_1.default.create({
+        // Create activation token BEFORE creating user
+        const activationToken = (0, user_controller_1.createActivationToken)({
             name,
             email,
             password,
-            role: "brand",
             companyName,
-            isVerified: false,
         });
-        // create Brand profile
-        yield brand_model_1.default.create({
-            userId: user._id,
-            companyEmail: email,
-            companyName,
-            campaigns: [],
-        });
-        // create activation token and email the brand
+        const activationCode = activationToken.activationCode;
+        const data = { user: { name }, activationCode };
+        // Try to send email first
         try {
-            const activationToken = (0, user_controller_1.createActivationToken)({
-                name,
-                email,
-                password,
-                companyName,
-            });
-            const activationCode = activationToken.activationCode;
-            const data = { user: { name }, activationCode };
             yield ejs_1.default.renderFile(path_1.default.join(__dirname, "../mails/activation-mail.ejs"), data);
             yield (0, sendEmail_1.default)({
                 email,
@@ -241,16 +229,32 @@ exports.registerBrand = (0, catchAsyncError_1.CatchAsyncError)((req, res, next) 
                 template: "activation-mail.ejs",
                 data,
             });
-            // return activation token to client along with login token
+            // Only create user and brand profile AFTER email is successfully sent
+            const user = yield user_model_1.default.create({
+                name,
+                email,
+                password,
+                role: "brand",
+                companyName,
+                isVerified: false,
+            });
+            // create Brand profile
+            yield brand_model_1.default.create({
+                userId: user._id,
+                companyEmail: email,
+                companyName,
+                campaigns: [],
+            });
             res.status(201).json({
                 success: true,
-                user,
+                message: "Registration successful! Please check your email to verify your account.",
                 activationToken: activationToken.token,
             });
         }
         catch (mailErr) {
-            // If email fails, still return created user/token to keep current behavior
-            (0, jwt_1.sendToken)(user, 201, res);
+            // If email fails, return error with details
+            console.error("Email sending failed:", mailErr);
+            return next(new ErrorHandler_1.default(`Registration failed: Unable to send verification email. Please check your email configuration. Error: ${mailErr.message}`, 500));
         }
     }
     catch (error) {

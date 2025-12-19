@@ -2,6 +2,7 @@ import mongoose from "mongoose";
 import LeaderboardModel from "../models/leaderboard.model";
 import PuzzleAttemptModel from "../models/puzzleAttempt.model";
 import UserModel from "../models/user.model";
+import PuzzleCampaignModel from "../models/puzzleCampaign.model";
 
 // Weekly leaderboard scheduler
 export const startScheduler = () => {
@@ -63,9 +64,41 @@ export const startScheduler = () => {
 
         console.log(`Created weekly leaderboard for week: ${weekKey}`);
       }
+
+      // Check and update expired campaigns
+      await checkExpiredCampaigns();
     } catch (err) {
       // eslint-disable-next-line no-console
       console.error("Scheduler error:", err);
     }
   }, checkInterval);
+};
+
+// Check and mark expired campaigns as ended
+export const checkExpiredCampaigns = async () => {
+  try {
+    // Skip if database is not connected
+    if (mongoose.connection.readyState !== 1) {
+      return;
+    }
+
+    const now = new Date();
+
+    // Find all active campaigns that have passed their end date
+    const result = await PuzzleCampaignModel.updateMany(
+      {
+        status: "active",
+        endDate: { $lt: now },
+      },
+      {
+        $set: { status: "ended" },
+      }
+    );
+
+    if (result.modifiedCount > 0) {
+      console.log(`✅ Marked ${result.modifiedCount} campaign(s) as ended`);
+    }
+  } catch (error) {
+    console.error("Error checking expired campaigns:", error);
+  }
 };

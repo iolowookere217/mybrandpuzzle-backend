@@ -12,24 +12,24 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.submitCampaign = exports.getCampaignById = exports.getCampaignsByBrand = exports.getAllCampaigns = void 0;
+exports.submitCampaign = exports.getCampaignById = exports.getCampaignsByBrand = exports.getAllCampaigns = exports.getActiveCampaigns = void 0;
 const catchAsyncError_1 = require("../middlewares/catchAsyncError");
 const ErrorHandler_1 = __importDefault(require("../utils/ErrorHandler"));
 const puzzleCampaign_model_1 = __importDefault(require("../models/puzzleCampaign.model"));
 const puzzleAttempt_model_1 = __importDefault(require("../models/puzzleAttempt.model"));
 const user_model_1 = __importDefault(require("../models/user.model"));
-// Get all campaigns (with brand name included)
-exports.getAllCampaigns = (0, catchAsyncError_1.CatchAsyncError)((req, res, next) => __awaiter(void 0, void 0, void 0, function* () {
+// Get active campaigns only (with brand name included)
+exports.getActiveCampaigns = (0, catchAsyncError_1.CatchAsyncError)((req, res, next) => __awaiter(void 0, void 0, void 0, function* () {
     try {
         const { gameType } = req.query;
-        // Build filter
-        const filter = {};
+        // Build filter for active campaigns only
+        const filter = { status: "active" };
         const validGameTypes = ["sliding_puzzle", "card_matching", "whack_a_mole", "word_hunt"];
         if (gameType && validGameTypes.includes(gameType)) {
             filter.gameType = gameType;
         }
         const campaigns = yield puzzleCampaign_model_1.default.find(filter)
-            .select("_id brandId gameType title description puzzleImageUrl timeLimit questions words createdAt")
+            .select("_id brandId packageId gameType title description brandUrl puzzleImageUrl timeLimit questions words status startDate endDate createdAt")
             .lean();
         // Fetch brand names for all campaigns
         const campaignsWithBrand = yield Promise.all(campaigns.map((campaign) => __awaiter(void 0, void 0, void 0, function* () {
@@ -37,14 +37,65 @@ exports.getAllCampaigns = (0, catchAsyncError_1.CatchAsyncError)((req, res, next
             return {
                 _id: campaign._id,
                 brandId: campaign.brandId,
+                packageId: campaign.packageId,
                 brandName: (brand === null || brand === void 0 ? void 0 : brand.companyName) || (brand === null || brand === void 0 ? void 0 : brand.name) || "Unknown Brand",
                 gameType: campaign.gameType,
                 title: campaign.title,
                 description: campaign.description,
+                brandUrl: campaign.brandUrl,
                 puzzleImageUrl: campaign.puzzleImageUrl,
                 timeLimit: campaign.timeLimit,
                 questions: campaign.questions,
                 words: campaign.words,
+                status: campaign.status,
+                startDate: campaign.startDate,
+                endDate: campaign.endDate,
+                createdAt: campaign.createdAt,
+            };
+        })));
+        res.status(200).json({ success: true, campaigns: campaignsWithBrand });
+    }
+    catch (error) {
+        return next(new ErrorHandler_1.default(error.message, 400));
+    }
+}));
+// Get all campaigns (with brand name included)
+exports.getAllCampaigns = (0, catchAsyncError_1.CatchAsyncError)((req, res, next) => __awaiter(void 0, void 0, void 0, function* () {
+    try {
+        const { gameType, status } = req.query;
+        // Build filter
+        const filter = {};
+        const validGameTypes = ["sliding_puzzle", "card_matching", "whack_a_mole", "word_hunt"];
+        if (gameType && validGameTypes.includes(gameType)) {
+            filter.gameType = gameType;
+        }
+        // Filter by status if provided
+        const validStatuses = ["active", "ended", "draft"];
+        if (status && validStatuses.includes(status)) {
+            filter.status = status;
+        }
+        const campaigns = yield puzzleCampaign_model_1.default.find(filter)
+            .select("_id brandId packageId gameType title description brandUrl puzzleImageUrl timeLimit questions words status startDate endDate createdAt")
+            .lean();
+        // Fetch brand names for all campaigns
+        const campaignsWithBrand = yield Promise.all(campaigns.map((campaign) => __awaiter(void 0, void 0, void 0, function* () {
+            const brand = yield user_model_1.default.findById(campaign.brandId).select("name companyName").lean();
+            return {
+                _id: campaign._id,
+                brandId: campaign.brandId,
+                packageId: campaign.packageId,
+                brandName: (brand === null || brand === void 0 ? void 0 : brand.companyName) || (brand === null || brand === void 0 ? void 0 : brand.name) || "Unknown Brand",
+                gameType: campaign.gameType,
+                title: campaign.title,
+                description: campaign.description,
+                brandUrl: campaign.brandUrl,
+                puzzleImageUrl: campaign.puzzleImageUrl,
+                timeLimit: campaign.timeLimit,
+                questions: campaign.questions,
+                words: campaign.words,
+                status: campaign.status,
+                startDate: campaign.startDate,
+                endDate: campaign.endDate,
                 createdAt: campaign.createdAt,
             };
         })));
@@ -59,7 +110,7 @@ exports.getCampaignsByBrand = (0, catchAsyncError_1.CatchAsyncError)((req, res, 
     try {
         const { brandId } = req.params;
         const campaigns = yield puzzleCampaign_model_1.default.find({ brandId })
-            .select("_id brandId gameType title description puzzleImageUrl timeLimit questions words createdAt")
+            .select("_id brandId packageId gameType title description brandUrl puzzleImageUrl timeLimit questions words status startDate endDate createdAt")
             .lean();
         if (!campaigns || campaigns.length === 0) {
             return res.status(200).json({ success: true, campaigns: [] });
@@ -70,14 +121,19 @@ exports.getCampaignsByBrand = (0, catchAsyncError_1.CatchAsyncError)((req, res, 
         const campaignsWithBrand = campaigns.map((campaign) => ({
             _id: campaign._id,
             brandId: campaign.brandId,
+            packageId: campaign.packageId,
             brandName,
             gameType: campaign.gameType,
             title: campaign.title,
             description: campaign.description,
+            brandUrl: campaign.brandUrl,
             puzzleImageUrl: campaign.puzzleImageUrl,
             timeLimit: campaign.timeLimit,
             questions: campaign.questions,
             words: campaign.words,
+            status: campaign.status,
+            startDate: campaign.startDate,
+            endDate: campaign.endDate,
             createdAt: campaign.createdAt,
         }));
         res.status(200).json({ success: true, campaigns: campaignsWithBrand });
@@ -102,10 +158,12 @@ exports.getCampaignById = (0, catchAsyncError_1.CatchAsyncError)((req, res, next
             campaign: {
                 _id: campaign._id,
                 brandId: campaign.brandId,
+                packageId: campaign.packageId,
                 brandName,
                 gameType: campaign.gameType,
                 title: campaign.title,
                 description: campaign.description,
+                brandUrl: campaign.brandUrl,
                 puzzleImageUrl: campaign.puzzleImageUrl,
                 originalImageUrl: campaign.originalImageUrl,
                 questions: campaign.questions.map((q) => ({
@@ -114,6 +172,9 @@ exports.getCampaignById = (0, catchAsyncError_1.CatchAsyncError)((req, res, next
                 })),
                 words: campaign.words,
                 timeLimit: campaign.timeLimit,
+                status: campaign.status,
+                startDate: campaign.startDate,
+                endDate: campaign.endDate,
                 createdAt: campaign.createdAt,
             },
         });

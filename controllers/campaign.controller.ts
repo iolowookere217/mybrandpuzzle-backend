@@ -5,21 +5,21 @@ import PuzzleCampaignModel from "../models/puzzleCampaign.model";
 import PuzzleAttemptModel from "../models/puzzleAttempt.model";
 import UserModel from "../models/user.model";
 
-// Get all campaigns (with brand name included)
-export const getAllCampaigns = CatchAsyncError(
+// Get active campaigns only (with brand name included)
+export const getActiveCampaigns = CatchAsyncError(
   async (req: Request, res: Response, next: NextFunction) => {
     try {
       const { gameType } = req.query;
 
-      // Build filter
-      const filter: any = {};
+      // Build filter for active campaigns only
+      const filter: any = { status: "active" };
       const validGameTypes = ["sliding_puzzle", "card_matching", "whack_a_mole", "word_hunt"];
       if (gameType && validGameTypes.includes(gameType as string)) {
         filter.gameType = gameType;
       }
 
       const campaigns = await PuzzleCampaignModel.find(filter)
-        .select("_id brandId gameType title description puzzleImageUrl timeLimit questions words createdAt")
+        .select("_id brandId packageId gameType title description brandUrl puzzleImageUrl timeLimit questions words status startDate endDate createdAt")
         .lean();
 
       // Fetch brand names for all campaigns
@@ -29,14 +29,74 @@ export const getAllCampaigns = CatchAsyncError(
           return {
             _id: campaign._id,
             brandId: campaign.brandId,
+            packageId: campaign.packageId,
             brandName: brand?.companyName || brand?.name || "Unknown Brand",
             gameType: campaign.gameType,
             title: campaign.title,
             description: campaign.description,
+            brandUrl: campaign.brandUrl,
             puzzleImageUrl: campaign.puzzleImageUrl,
             timeLimit: campaign.timeLimit,
             questions: campaign.questions,
             words: campaign.words,
+            status: campaign.status,
+            startDate: campaign.startDate,
+            endDate: campaign.endDate,
+            createdAt: (campaign as any).createdAt,
+          };
+        })
+      );
+
+      res.status(200).json({ success: true, campaigns: campaignsWithBrand });
+    } catch (error: any) {
+      return next(new ErrorHandler(error.message, 400));
+    }
+  }
+);
+
+// Get all campaigns (with brand name included)
+export const getAllCampaigns = CatchAsyncError(
+  async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const { gameType, status } = req.query;
+
+      // Build filter
+      const filter: any = {};
+      const validGameTypes = ["sliding_puzzle", "card_matching", "whack_a_mole", "word_hunt"];
+      if (gameType && validGameTypes.includes(gameType as string)) {
+        filter.gameType = gameType;
+      }
+
+      // Filter by status if provided
+      const validStatuses = ["active", "ended", "draft"];
+      if (status && validStatuses.includes(status as string)) {
+        filter.status = status;
+      }
+
+      const campaigns = await PuzzleCampaignModel.find(filter)
+        .select("_id brandId packageId gameType title description brandUrl puzzleImageUrl timeLimit questions words status startDate endDate createdAt")
+        .lean();
+
+      // Fetch brand names for all campaigns
+      const campaignsWithBrand = await Promise.all(
+        campaigns.map(async (campaign) => {
+          const brand = await UserModel.findById(campaign.brandId).select("name companyName").lean();
+          return {
+            _id: campaign._id,
+            brandId: campaign.brandId,
+            packageId: campaign.packageId,
+            brandName: brand?.companyName || brand?.name || "Unknown Brand",
+            gameType: campaign.gameType,
+            title: campaign.title,
+            description: campaign.description,
+            brandUrl: campaign.brandUrl,
+            puzzleImageUrl: campaign.puzzleImageUrl,
+            timeLimit: campaign.timeLimit,
+            questions: campaign.questions,
+            words: campaign.words,
+            status: campaign.status,
+            startDate: campaign.startDate,
+            endDate: campaign.endDate,
             createdAt: (campaign as any).createdAt,
           };
         })
@@ -56,7 +116,7 @@ export const getCampaignsByBrand = CatchAsyncError(
       const { brandId } = req.params;
 
       const campaigns = await PuzzleCampaignModel.find({ brandId })
-        .select("_id brandId gameType title description puzzleImageUrl timeLimit questions words createdAt")
+        .select("_id brandId packageId gameType title description brandUrl puzzleImageUrl timeLimit questions words status startDate endDate createdAt")
         .lean();
 
       if (!campaigns || campaigns.length === 0) {
@@ -70,14 +130,19 @@ export const getCampaignsByBrand = CatchAsyncError(
       const campaignsWithBrand = campaigns.map((campaign) => ({
         _id: campaign._id,
         brandId: campaign.brandId,
+        packageId: campaign.packageId,
         brandName,
         gameType: campaign.gameType,
         title: campaign.title,
         description: campaign.description,
+        brandUrl: campaign.brandUrl,
         puzzleImageUrl: campaign.puzzleImageUrl,
         timeLimit: campaign.timeLimit,
         questions: campaign.questions,
         words: campaign.words,
+        status: campaign.status,
+        startDate: campaign.startDate,
+        endDate: campaign.endDate,
         createdAt: (campaign as any).createdAt,
       }));
 
@@ -108,10 +173,12 @@ export const getCampaignById = CatchAsyncError(
         campaign: {
           _id: campaign._id,
           brandId: campaign.brandId,
+          packageId: campaign.packageId,
           brandName,
           gameType: campaign.gameType,
           title: campaign.title,
           description: campaign.description,
+          brandUrl: campaign.brandUrl,
           puzzleImageUrl: campaign.puzzleImageUrl,
           originalImageUrl: campaign.originalImageUrl,
           questions: campaign.questions.map((q: any) => ({
@@ -120,6 +187,9 @@ export const getCampaignById = CatchAsyncError(
           })),
           words: campaign.words,
           timeLimit: campaign.timeLimit,
+          status: campaign.status,
+          startDate: campaign.startDate,
+          endDate: campaign.endDate,
           createdAt: (campaign as any).createdAt,
         },
       });

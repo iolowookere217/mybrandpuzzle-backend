@@ -99,27 +99,18 @@ export const registerGamer = CatchAsyncError(
       const username = await generateUsername(email);
       const avatar = generateAvatar();
 
-      const user = await UserModel.create({
+      // Create activation token BEFORE creating user
+      const activationToken = createActivationToken({
         firstName,
-        lastName: lastName || "",
-        username,
+        lastName,
         email,
         password,
-        avatar,
-        role: "gamer",
-        isVerified: false,
       });
+      const activationCode = activationToken.activationCode;
+      const data = { user: { name: firstName }, activationCode };
 
-      // create activation token and email the gamer
+      // Try to send email first
       try {
-        const activationToken = createActivationToken({
-          firstName,
-          lastName,
-          email,
-          password,
-        });
-        const activationCode = activationToken.activationCode;
-        const data = { user: { name: firstName }, activationCode };
         await ejs.renderFile(
           path.join(__dirname, "../mails/activation-mail.ejs"),
           data
@@ -131,15 +122,32 @@ export const registerGamer = CatchAsyncError(
           data,
         });
 
+        // Only create user AFTER email is successfully sent
+        const user = await UserModel.create({
+          firstName,
+          lastName: lastName || "",
+          username,
+          email,
+          password,
+          avatar,
+          role: "gamer",
+          isVerified: false,
+        });
+
         res.status(201).json({
           success: true,
-          user,
+          message: "Registration successful! Please check your email to verify your account.",
           activationToken: activationToken.token,
-          message: "Activation email sent. Please verify your email.",
         });
       } catch (mailErr: any) {
-        // If email fails, still return created user/token
-        sendToken(user, 201, res);
+        // If email fails, return error with details
+        console.error("Email sending failed:", mailErr);
+        return next(
+          new ErrorHandler(
+            `Registration failed: Unable to send verification email. Please check your email configuration. Error: ${mailErr.message}`,
+            500
+          )
+        );
       }
     } catch (error: any) {
       return next(new ErrorHandler(error.message, 400));
@@ -243,33 +251,18 @@ export const registerBrand = CatchAsyncError(
       const existing = await UserModel.findOne({ email });
       if (existing) return next(new ErrorHandler("Email already exists", 400));
 
-      const user = await UserModel.create({
+      // Create activation token BEFORE creating user
+      const activationToken = createActivationToken({
         name,
         email,
         password,
-        role: "brand",
         companyName,
-        isVerified: false,
       });
+      const activationCode = activationToken.activationCode;
+      const data = { user: { name }, activationCode };
 
-      // create Brand profile
-      await BrandModel.create({
-        userId: user._id,
-        companyEmail: email,
-        companyName,
-        campaigns: [],
-      });
-
-      // create activation token and email the brand
+      // Try to send email first
       try {
-        const activationToken = createActivationToken({
-          name,
-          email,
-          password,
-          companyName,
-        });
-        const activationCode = activationToken.activationCode;
-        const data = { user: { name }, activationCode };
         await ejs.renderFile(
           path.join(__dirname, "../mails/activation-mail.ejs"),
           data
@@ -281,15 +274,38 @@ export const registerBrand = CatchAsyncError(
           data,
         });
 
-        // return activation token to client along with login token
+        // Only create user and brand profile AFTER email is successfully sent
+        const user = await UserModel.create({
+          name,
+          email,
+          password,
+          role: "brand",
+          companyName,
+          isVerified: false,
+        });
+
+        // create Brand profile
+        await BrandModel.create({
+          userId: user._id,
+          companyEmail: email,
+          companyName,
+          campaigns: [],
+        });
+
         res.status(201).json({
           success: true,
-          user,
+          message: "Registration successful! Please check your email to verify your account.",
           activationToken: activationToken.token,
         });
       } catch (mailErr: any) {
-        // If email fails, still return created user/token to keep current behavior
-        sendToken(user, 201, res);
+        // If email fails, return error with details
+        console.error("Email sending failed:", mailErr);
+        return next(
+          new ErrorHandler(
+            `Registration failed: Unable to send verification email. Please check your email configuration. Error: ${mailErr.message}`,
+            500
+          )
+        );
       }
     } catch (error: any) {
       return next(new ErrorHandler(error.message, 400));

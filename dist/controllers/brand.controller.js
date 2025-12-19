@@ -20,6 +20,7 @@ const brand_model_1 = __importDefault(require("../models/brand.model"));
 const firebaseConfig_1 = require("../firebaseConfig");
 const puzzleAttempt_model_1 = __importDefault(require("../models/puzzleAttempt.model"));
 const user_model_1 = __importDefault(require("../models/user.model"));
+const package_model_1 = __importDefault(require("../models/package.model"));
 // Create a puzzle campaign (brands only). Expects multipart upload with one file: "image" (used for both scrambled and original)
 exports.createCampaign = (0, catchAsyncError_1.CatchAsyncError)((req, res, next) => __awaiter(void 0, void 0, void 0, function* () {
     var _a, _b, _c;
@@ -27,7 +28,19 @@ exports.createCampaign = (0, catchAsyncError_1.CatchAsyncError)((req, res, next)
         const brandUser = req.user;
         if (brandUser.role !== "brand")
             return next(new ErrorHandler_1.default("Only brands can create campaigns", 403));
-        const { questions, title, description, gameType, words } = req.body;
+        const { questions, title, description, gameType, words, packageId, brandUrl } = req.body;
+        // Validate packageId
+        if (!packageId || typeof packageId !== "string") {
+            return next(new ErrorHandler_1.default("packageId is required and must be a valid string", 400));
+        }
+        // Verify package exists
+        const packageData = yield package_model_1.default.findById(packageId);
+        if (!packageData) {
+            return next(new ErrorHandler_1.default("Invalid package. Package not found.", 404));
+        }
+        if (!packageData.isActive) {
+            return next(new ErrorHandler_1.default("Selected package is not available", 400));
+        }
         // validate required fields
         if (!title || typeof title !== "string" || title.trim() === "") {
             return next(new ErrorHandler_1.default("title is required and must be a non-empty string", 400));
@@ -166,9 +179,14 @@ exports.createCampaign = (0, catchAsyncError_1.CatchAsyncError)((req, res, next)
         if (timeLimitVal === null || timeLimitVal === undefined) {
             return next(new ErrorHandler_1.default("timeLimit (hours) is required and must be a number", 400));
         }
+        // Calculate campaign start and end dates based on package duration
+        const startDate = new Date();
+        const endDate = new Date();
+        endDate.setDate(endDate.getDate() + (packageData.duration * 7)); // duration is in weeks
         // Prepare campaign data
         const campaignData = {
             brandId: brandUser._id,
+            packageId: packageId,
             gameType: campaignGameType,
             title: title.trim(),
             description: description.trim(),
@@ -176,7 +194,14 @@ exports.createCampaign = (0, catchAsyncError_1.CatchAsyncError)((req, res, next)
             originalImageUrl: originalUrl,
             questions: parsedQuestions,
             timeLimit: timeLimitVal,
+            status: "active",
+            startDate,
+            endDate,
         };
+        // Add brandUrl if provided
+        if (brandUrl && typeof brandUrl === "string" && brandUrl.trim() !== "") {
+            campaignData.brandUrl = brandUrl.trim();
+        }
         // For word_hunt games, add words array
         if (campaignGameType === "word_hunt" && parsedWords.length > 0) {
             campaignData.words = parsedWords;

@@ -9,6 +9,8 @@ const auth_1 = require("../utils/auth");
 const router = express_1.default.Router();
 // Get all campaigns
 router.get("/campaigns", auth_1.isAuthenticated, campaign_controller_1.getAllCampaigns);
+// Get active campaigns only
+router.get("/campaigns/active", auth_1.isAuthenticated, campaign_controller_1.getActiveCampaigns);
 // Get campaigns by brand ID
 router.get("/campaigns/brand/:brandId", auth_1.isAuthenticated, campaign_controller_1.getCampaignsByBrand);
 // Get single campaign by campaign ID

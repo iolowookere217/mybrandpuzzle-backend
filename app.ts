@@ -7,6 +7,7 @@ import campaignRouter from "./routes/campaign.route";
 import brandRouter from "./routes/brand.route";
 import leaderboardRouter from "./routes/leaderboard.route";
 import userRouter from "./routes/user.route";
+import packageRouter from "./routes/package.route";
 
 const app = express();
 
@@ -30,7 +31,8 @@ app.use(
   campaignRouter,
   brandRouter,
   leaderboardRouter,
-  userRouter
+  userRouter,
+  packageRouter
 );
 
 //testing api
