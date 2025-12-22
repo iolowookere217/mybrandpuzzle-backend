@@ -46,6 +46,7 @@ const puzzleCampaignSchema = new mongoose_1.default.Schema({
     title: { type: String, required: true },
     description: { type: String, required: true },
     brandUrl: { type: String, required: false },
+    campaignUrl: { type: String, required: false },
     puzzleImageUrl: { type: String, required: true },
     originalImageUrl: { type: String, required: true },
     questions: [
@@ -56,7 +57,6 @@ const puzzleCampaignSchema = new mongoose_1.default.Schema({
         },
     ],
     words: [{ type: String }], // for word_hunt games
-    timeLimit: { type: Number, required: true },
     status: {
         type: String,
         enum: ["active", "ended", "draft"],

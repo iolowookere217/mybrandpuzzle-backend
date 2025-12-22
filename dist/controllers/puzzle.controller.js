@@ -51,7 +51,6 @@ exports.getPuzzle = (0, catchAsyncError_1.CatchAsyncError)((req, res, next) => _
                     question: q.question,
                     choices: q.choices,
                 })),
-                timeLimit: campaign.timeLimit,
             },
         });
     }

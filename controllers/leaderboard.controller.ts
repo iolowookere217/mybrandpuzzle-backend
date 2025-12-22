@@ -3,6 +3,7 @@ import { CatchAsyncError } from "../middlewares/catchAsyncError";
 import ErrorHandler from "../utils/ErrorHandler";
 import PuzzleAttemptModel from "../models/puzzleAttempt.model";
 import LeaderboardModel from "../models/leaderboard.model";
+import UserModel from "../models/user.model";
 
 // Get current week's leaderboard
 export const getWeeklyLeaderboard = CatchAsyncError(
@@ -57,14 +58,33 @@ export const getWeeklyLeaderboard = CatchAsyncError(
         { upsert: true }
       );
 
+      // Fetch user details for each entry
+      const entriesWithUserDetails = await Promise.all(
+        entries.map(async (entry: any, index: number) => {
+          const user = await UserModel.findById(entry.userId)
+            .select("firstName lastName avatar")
+            .lean();
+
+          return {
+            position: index + 1,
+            userId: entry.userId,
+            fullName: user ? `${user.firstName} ${user.lastName}` : "Unknown User",
+            avatar: user?.avatar || "",
+            puzzlesSolved: entry.puzzlesSolved,
+            points: entry.points,
+            amountEarned: entry.points, // Points = amount earned
+          };
+        })
+      );
+
       res.status(200).json({
         success: true,
         leaderboard: {
           type: "weekly",
           weekStart: weekStart.toISOString().slice(0, 10),
           weekEnd: weekEnd.toISOString().slice(0, 10),
-          totalPlayers: entries.length,
-          entries,
+          totalPlayers: entriesWithUserDetails.length,
+          entries: entriesWithUserDetails,
         },
       });
     } catch (error: any) {
@@ -96,13 +116,32 @@ export const getLeaderboardByWeek = CatchAsyncError(
         });
       }
 
+      // Fetch user details for each entry
+      const entriesWithUserDetails = await Promise.all(
+        board.entries.map(async (entry: any, index: number) => {
+          const user = await UserModel.findById(entry.userId)
+            .select("firstName lastName avatar")
+            .lean();
+
+          return {
+            position: index + 1,
+            userId: entry.userId,
+            fullName: user ? `${user.firstName} ${user.lastName}` : "Unknown User",
+            avatar: user?.avatar || "",
+            puzzlesSolved: entry.puzzlesSolved,
+            points: entry.points,
+            amountEarned: entry.points, // Points = amount earned
+          };
+        })
+      );
+
       res.status(200).json({
         success: true,
         leaderboard: {
           type: "weekly",
           weekKey,
-          totalPlayers: board.entries.length,
-          entries: board.entries,
+          totalPlayers: entriesWithUserDetails.length,
+          entries: entriesWithUserDetails,
         },
       });
     } catch (error: any) {

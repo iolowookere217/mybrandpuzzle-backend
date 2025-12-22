@@ -17,6 +17,7 @@ const user_model_1 = __importDefault(require("../models/user.model"));
 const ErrorHandler_1 = __importDefault(require("../utils/ErrorHandler"));
 const catchAsyncError_1 = require("../middlewares/catchAsyncError");
 const jsonwebtoken_1 = __importDefault(require("jsonwebtoken"));
+const puzzleAttempt_model_1 = __importDefault(require("../models/puzzleAttempt.model"));
 const ejs_1 = __importDefault(require("ejs"));
 const path_1 = __importDefault(require("path"));
 const sendEmail_1 = __importDefault(require("../utils/sendEmail"));
@@ -208,6 +209,36 @@ exports.getGamerProfile = (0, catchAsyncError_1.CatchAsyncError)((req, res, next
         if (!user) {
             return next(new ErrorHandler_1.default("User not found", 404));
         }
+        // Calculate current week's leaderboard position
+        const now = new Date();
+        const dayOfWeek = now.getDay();
+        const daysFromMonday = dayOfWeek === 0 ? 6 : dayOfWeek - 1;
+        const weekStart = new Date(now.getFullYear(), now.getMonth(), now.getDate() - daysFromMonday);
+        const weekEnd = new Date(weekStart);
+        weekEnd.setDate(weekEnd.getDate() + 6);
+        // Get current week's leaderboard
+        const agg = yield puzzleAttempt_model_1.default.aggregate([
+            {
+                $match: {
+                    firstTimeSolved: true,
+                    timestamp: { $gte: weekStart, $lte: weekEnd },
+                },
+            },
+            {
+                $group: {
+                    _id: "$userId",
+                    puzzlesSolved: { $sum: 1 },
+                    points: { $sum: "$pointsEarned" },
+                },
+            },
+            { $sort: { puzzlesSolved: -1, points: -1 } },
+        ]);
+        // Find user's position
+        let leaderboardPosition = null;
+        const userIndex = agg.findIndex((entry) => entry._id.toString() === userId.toString());
+        if (userIndex !== -1) {
+            leaderboardPosition = userIndex + 1;
+        }
         res.status(200).json({
             success: true,
             profile: {
@@ -221,6 +252,7 @@ exports.getGamerProfile = (0, catchAsyncError_1.CatchAsyncError)((req, res, next
                 isVerified: user.isVerified,
                 analytics: user.analytics,
                 puzzlesSolved: user.puzzlesSolved,
+                leaderboardPosition, // Position on current week's leaderboard
                 createdAt: user.createdAt,
                 updatedAt: user.updatedAt,
             },

@@ -3,6 +3,7 @@ import userModel, { IUser } from "../models/user.model";
 import ErrorHandler from "../utils/ErrorHandler";
 import { CatchAsyncError } from "../middlewares/catchAsyncError";
 import jwt, { Secret, JwtPayload } from "jsonwebtoken";
+import PuzzleAttemptModel from "../models/puzzleAttempt.model";
 
 import ejs from "ejs";
 import path from "path";
@@ -299,6 +300,44 @@ export const getGamerProfile = CatchAsyncError(
         return next(new ErrorHandler("User not found", 404));
       }
 
+      // Calculate current week's leaderboard position
+      const now = new Date();
+      const dayOfWeek = now.getDay();
+      const daysFromMonday = dayOfWeek === 0 ? 6 : dayOfWeek - 1;
+
+      const weekStart = new Date(
+        now.getFullYear(),
+        now.getMonth(),
+        now.getDate() - daysFromMonday
+      );
+      const weekEnd = new Date(weekStart);
+      weekEnd.setDate(weekEnd.getDate() + 6);
+
+      // Get current week's leaderboard
+      const agg = await PuzzleAttemptModel.aggregate([
+        {
+          $match: {
+            firstTimeSolved: true,
+            timestamp: { $gte: weekStart, $lte: weekEnd },
+          },
+        },
+        {
+          $group: {
+            _id: "$userId",
+            puzzlesSolved: { $sum: 1 },
+            points: { $sum: "$pointsEarned" },
+          },
+        },
+        { $sort: { puzzlesSolved: -1, points: -1 } },
+      ]);
+
+      // Find user's position
+      let leaderboardPosition = null;
+      const userIndex = agg.findIndex((entry: any) => entry._id.toString() === userId.toString());
+      if (userIndex !== -1) {
+        leaderboardPosition = userIndex + 1;
+      }
+
       res.status(200).json({
         success: true,
         profile: {
@@ -312,6 +351,7 @@ export const getGamerProfile = CatchAsyncError(
           isVerified: user.isVerified,
           analytics: user.analytics,
           puzzlesSolved: user.puzzlesSolved,
+          leaderboardPosition, // Position on current week's leaderboard
           createdAt: (user as any).createdAt,
           updatedAt: (user as any).updatedAt,
         },

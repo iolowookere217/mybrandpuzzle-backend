@@ -85,3 +85,65 @@ export const getPackageById = CatchAsyncError(
     }
   }
 );
+
+// Create a new package (Admin only)
+export const createPackage = CatchAsyncError(
+  async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const { name, amount, duration, description } = req.body;
+
+      // Validate required fields
+      if (!name || typeof name !== "string" || name.trim() === "") {
+        return next(
+          new ErrorHandler("name is required and must be a non-empty string", 400)
+        );
+      }
+
+      if (!amount || typeof amount !== "number" || amount <= 0) {
+        return next(
+          new ErrorHandler("amount is required and must be a positive number", 400)
+        );
+      }
+
+      if (!duration || typeof duration !== "number" || duration <= 0) {
+        return next(
+          new ErrorHandler(
+            "duration is required and must be a positive number (in weeks)",
+            400
+          )
+        );
+      }
+
+      // Check if package with same name already exists
+      const existingPackage = await PackageModel.findOne({
+        name: name.trim().toLowerCase(),
+      });
+
+      if (existingPackage) {
+        return next(
+          new ErrorHandler(
+            `Package with name "${name}" already exists`,
+            400
+          )
+        );
+      }
+
+      // Create new package
+      const newPackage = await PackageModel.create({
+        name: name.trim().toLowerCase(),
+        amount,
+        duration,
+        description: description || `${duration} week${duration > 1 ? "s" : ""} campaign package`,
+        isActive: true,
+      });
+
+      res.status(201).json({
+        success: true,
+        message: "Package created successfully",
+        package: newPackage,
+      });
+    } catch (error: any) {
+      return next(new ErrorHandler(error.message, 400));
+    }
+  }
+);

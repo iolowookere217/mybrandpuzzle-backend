@@ -46,7 +46,6 @@ export const getPuzzle = CatchAsyncError(
             question: q.question,
             choices: q.choices,
           })),
-          timeLimit: campaign.timeLimit,
         },
       });
     } catch (error: any) {

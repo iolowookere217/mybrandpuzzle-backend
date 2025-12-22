@@ -17,6 +17,7 @@ const catchAsyncError_1 = require("../middlewares/catchAsyncError");
 const ErrorHandler_1 = __importDefault(require("../utils/ErrorHandler"));
 const puzzleAttempt_model_1 = __importDefault(require("../models/puzzleAttempt.model"));
 const leaderboard_model_1 = __importDefault(require("../models/leaderboard.model"));
+const user_model_1 = __importDefault(require("../models/user.model"));
 // Get current week's leaderboard
 exports.getWeeklyLeaderboard = (0, catchAsyncError_1.CatchAsyncError)((req, res, next) => __awaiter(void 0, void 0, void 0, function* () {
     try {
@@ -54,14 +55,29 @@ exports.getWeeklyLeaderboard = (0, catchAsyncError_1.CatchAsyncError)((req, res,
         const weekKey = `${weekStart.toISOString().slice(0, 10)}_to_${weekEnd.toISOString().slice(0, 10)}`;
         // upsert leaderboard document for this week
         yield leaderboard_model_1.default.findOneAndUpdate({ type: "weekly", date: weekKey }, { type: "weekly", date: weekKey, entries }, { upsert: true });
+        // Fetch user details for each entry
+        const entriesWithUserDetails = yield Promise.all(entries.map((entry, index) => __awaiter(void 0, void 0, void 0, function* () {
+            const user = yield user_model_1.default.findById(entry.userId)
+                .select("firstName lastName avatar")
+                .lean();
+            return {
+                position: index + 1,
+                userId: entry.userId,
+                fullName: user ? `${user.firstName} ${user.lastName}` : "Unknown User",
+                avatar: (user === null || user === void 0 ? void 0 : user.avatar) || "",
+                puzzlesSolved: entry.puzzlesSolved,
+                points: entry.points,
+                amountEarned: entry.points, // Points = amount earned
+            };
+        })));
         res.status(200).json({
             success: true,
             leaderboard: {
                 type: "weekly",
                 weekStart: weekStart.toISOString().slice(0, 10),
                 weekEnd: weekEnd.toISOString().slice(0, 10),
-                totalPlayers: entries.length,
-                entries,
+                totalPlayers: entriesWithUserDetails.length,
+                entries: entriesWithUserDetails,
             },
         });
     }
@@ -88,13 +104,28 @@ exports.getLeaderboardByWeek = (0, catchAsyncError_1.CatchAsyncError)((req, res,
                 },
             });
         }
+        // Fetch user details for each entry
+        const entriesWithUserDetails = yield Promise.all(board.entries.map((entry, index) => __awaiter(void 0, void 0, void 0, function* () {
+            const user = yield user_model_1.default.findById(entry.userId)
+                .select("firstName lastName avatar")
+                .lean();
+            return {
+                position: index + 1,
+                userId: entry.userId,
+                fullName: user ? `${user.firstName} ${user.lastName}` : "Unknown User",
+                avatar: (user === null || user === void 0 ? void 0 : user.avatar) || "",
+                puzzlesSolved: entry.puzzlesSolved,
+                points: entry.points,
+                amountEarned: entry.points, // Points = amount earned
+            };
+        })));
         res.status(200).json({
             success: true,
             leaderboard: {
                 type: "weekly",
                 weekKey,
-                totalPlayers: board.entries.length,
-                entries: board.entries,
+                totalPlayers: entriesWithUserDetails.length,
+                entries: entriesWithUserDetails,
             },
         });
     }

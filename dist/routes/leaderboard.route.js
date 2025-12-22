@@ -5,8 +5,8 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
 Object.defineProperty(exports, "__esModule", { value: true });
 const express_1 = __importDefault(require("express"));
 const leaderboard_controller_1 = require("../controllers/leaderboard.controller");
-const auth_1 = require("../utils/auth");
 const router = express_1.default.Router();
-router.get("/leaderboards/weekly", auth_1.isAuthenticated, leaderboard_controller_1.getWeeklyLeaderboard);
-router.get("/leaderboards/weekly/:weekKey", auth_1.isAuthenticated, leaderboard_controller_1.getLeaderboardByWeek);
+// Public endpoints - no authentication required
+router.get("/leaderboards/weekly", leaderboard_controller_1.getWeeklyLeaderboard);
+router.get("/leaderboards/weekly/:weekKey", leaderboard_controller_1.getLeaderboardByWeek);
 exports.default = router;

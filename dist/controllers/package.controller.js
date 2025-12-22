@@ -12,7 +12,7 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.getPackageById = exports.getAllPackages = exports.initializePackages = void 0;
+exports.createPackage = exports.getPackageById = exports.getAllPackages = exports.initializePackages = void 0;
 const catchAsyncError_1 = require("../middlewares/catchAsyncError");
 const ErrorHandler_1 = __importDefault(require("../utils/ErrorHandler"));
 const package_model_1 = __importDefault(require("../models/package.model"));
@@ -86,6 +86,45 @@ exports.getPackageById = (0, catchAsyncError_1.CatchAsyncError)((req, res, next)
         res.status(200).json({
             success: true,
             package: packageData,
+        });
+    }
+    catch (error) {
+        return next(new ErrorHandler_1.default(error.message, 400));
+    }
+}));
+// Create a new package (Admin only)
+exports.createPackage = (0, catchAsyncError_1.CatchAsyncError)((req, res, next) => __awaiter(void 0, void 0, void 0, function* () {
+    try {
+        const { name, amount, duration, description } = req.body;
+        // Validate required fields
+        if (!name || typeof name !== "string" || name.trim() === "") {
+            return next(new ErrorHandler_1.default("name is required and must be a non-empty string", 400));
+        }
+        if (!amount || typeof amount !== "number" || amount <= 0) {
+            return next(new ErrorHandler_1.default("amount is required and must be a positive number", 400));
+        }
+        if (!duration || typeof duration !== "number" || duration <= 0) {
+            return next(new ErrorHandler_1.default("duration is required and must be a positive number (in weeks)", 400));
+        }
+        // Check if package with same name already exists
+        const existingPackage = yield package_model_1.default.findOne({
+            name: name.trim().toLowerCase(),
+        });
+        if (existingPackage) {
+            return next(new ErrorHandler_1.default(`Package with name "${name}" already exists`, 400));
+        }
+        // Create new package
+        const newPackage = yield package_model_1.default.create({
+            name: name.trim().toLowerCase(),
+            amount,
+            duration,
+            description: description || `${duration} week${duration > 1 ? "s" : ""} campaign package`,
+            isActive: true,
+        });
+        res.status(201).json({
+            success: true,
+            message: "Package created successfully",
+            package: newPackage,
         });
     }
     catch (error) {

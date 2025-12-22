@@ -16,7 +16,7 @@ export const createCampaign = CatchAsyncError(
       if (brandUser.role !== "brand")
         return next(new ErrorHandler("Only brands can create campaigns", 403));
 
-      const { questions, title, description, gameType, words, packageId, brandUrl } = req.body;
+      const { questions, title, description, gameType, words, packageId, brandUrl, campaignUrl } = req.body;
 
       // Validate packageId
       if (!packageId || typeof packageId !== "string") {
@@ -214,16 +214,6 @@ export const createCampaign = CatchAsyncError(
         return Number.isFinite(n) ? n : null;
       };
 
-      const timeLimitVal = getNumericFromBody("timeLimit");
-      if (timeLimitVal === null || timeLimitVal === undefined) {
-        return next(
-          new ErrorHandler(
-            "timeLimit (hours) is required and must be a number",
-            400
-          )
-        );
-      }
-
       // Calculate campaign start and end dates based on package duration
       const startDate = new Date();
       const endDate = new Date();
@@ -239,7 +229,6 @@ export const createCampaign = CatchAsyncError(
         puzzleImageUrl: puzzleUrl,
         originalImageUrl: originalUrl,
         questions: parsedQuestions,
-        timeLimit: timeLimitVal,
         status: "active",
         startDate,
         endDate,
@@ -248,6 +237,11 @@ export const createCampaign = CatchAsyncError(
       // Add brandUrl if provided
       if (brandUrl && typeof brandUrl === "string" && brandUrl.trim() !== "") {
         campaignData.brandUrl = brandUrl.trim();
+      }
+
+      // Add campaignUrl if provided
+      if (campaignUrl && typeof campaignUrl === "string" && campaignUrl.trim() !== "") {
+        campaignData.campaignUrl = campaignUrl.trim();
       }
 
       // For word_hunt games, add words array

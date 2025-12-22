@@ -11,4 +11,6 @@ const router = express_1.default.Router();
 router.get("/packages", auth_1.isAuthenticated, package_controller_1.getAllPackages);
 // Get package by ID
 router.get("/packages/:packageId", auth_1.isAuthenticated, package_controller_1.getPackageById);
+// Create new package (Admin only - TODO: add admin middleware)
+router.post("/packages", auth_1.isAuthenticated, package_controller_1.createPackage);
 exports.default = router;

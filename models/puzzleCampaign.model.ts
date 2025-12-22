@@ -13,11 +13,11 @@ export interface IPuzzleCampaign extends Document {
   title: string;
   description: string;
   brandUrl?: string; // brand's website or social media URL
+  campaignUrl?: string; // specific URL for this campaign
   puzzleImageUrl: string;
   originalImageUrl: string;
   questions: IQuestion[];
   words?: string[]; // for word_hunt games only
-  timeLimit: number; // hours - time limit for playing the game
   status: "active" | "ended" | "draft";
   startDate: Date;
   endDate: Date;
@@ -37,6 +37,7 @@ const puzzleCampaignSchema: Schema<IPuzzleCampaign> = new mongoose.Schema(
     title: { type: String, required: true },
     description: { type: String, required: true },
     brandUrl: { type: String, required: false },
+    campaignUrl: { type: String, required: false },
     puzzleImageUrl: { type: String, required: true },
     originalImageUrl: { type: String, required: true },
     questions: [
@@ -47,7 +48,6 @@ const puzzleCampaignSchema: Schema<IPuzzleCampaign> = new mongoose.Schema(
       },
     ],
     words: [{ type: String }], // for word_hunt games
-    timeLimit: { type: Number, required: true },
     status: {
       type: String,
       enum: ["active", "ended", "draft"],
