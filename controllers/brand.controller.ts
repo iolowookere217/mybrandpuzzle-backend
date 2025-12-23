@@ -16,11 +16,7 @@ export const createCampaign = CatchAsyncError(
       if (brandUser.role !== "brand")
         return next(new ErrorHandler("Only brands can create campaigns", 403));
 
-      const { questions, title, description, gameType, words, packageId, brandUrl, campaignUrl } = req.body;
-
-      // Debug logging
-      console.log('Received campaignUrl:', campaignUrl);
-      console.log('Type of campaignUrl:', typeof campaignUrl);
+      const { questions, title, description, gameType, words, packageId, brandUrl, campaignUrl, timeLimit } = req.body;
 
       // Validate packageId
       if (!packageId || typeof packageId !== "string") {
@@ -218,10 +214,21 @@ export const createCampaign = CatchAsyncError(
         return Number.isFinite(n) ? n : null;
       };
 
-      // Calculate campaign start and end dates based on package duration
+      // Validate timeLimit
+      const parsedTimeLimit = Number(timeLimit);
+      if (!timeLimit || isNaN(parsedTimeLimit) || parsedTimeLimit <= 0) {
+        return next(
+          new ErrorHandler(
+            "timeLimit is required and must be a positive number (in hours)",
+            400
+          )
+        );
+      }
+
+      // Calculate campaign start and end dates based on timeLimit (in hours)
       const startDate = new Date();
       const endDate = new Date();
-      endDate.setDate(endDate.getDate() + (packageData.duration * 7)); // duration is in weeks
+      endDate.setHours(endDate.getHours() + parsedTimeLimit); // Add timeLimit hours to current time
 
       // Prepare campaign data
       const campaignData: any = {
@@ -235,6 +242,7 @@ export const createCampaign = CatchAsyncError(
         puzzleImageUrl: puzzleUrl,
         originalImageUrl: originalUrl,
         questions: parsedQuestions,
+        timeLimit: parsedTimeLimit,
         status: "active",
         startDate,
         endDate,

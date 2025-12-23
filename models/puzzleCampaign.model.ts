@@ -18,6 +18,7 @@ export interface IPuzzleCampaign extends Document {
   originalImageUrl: string;
   questions: IQuestion[];
   words?: string[]; // for word_hunt games only
+  timeLimit: number; // campaign duration in hours
   status: "active" | "ended" | "draft";
   startDate: Date;
   endDate: Date;
@@ -48,6 +49,7 @@ const puzzleCampaignSchema: Schema<IPuzzleCampaign> = new mongoose.Schema(
       },
     ],
     words: [{ type: String }], // for word_hunt games
+    timeLimit: { type: Number, required: true }, // campaign duration in hours
     status: {
       type: String,
       enum: ["active", "ended", "draft"],

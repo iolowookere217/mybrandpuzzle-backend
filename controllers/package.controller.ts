@@ -10,31 +10,17 @@ export const initializePackages = async () => {
     if (count === 0) {
       await PackageModel.insertMany([
         {
-          name: "platinum",
-          amount: 100000,
-          duration: 1,
-          description: "1 week campaign package",
+          name: "premium",
+          amount: 10000,
+          priority: 2,
+          description: "Premium package - Higher visibility",
           isActive: true,
         },
         {
-          name: "bronze",
-          amount: 150000,
-          duration: 2,
-          description: "2 weeks campaign package",
-          isActive: true,
-        },
-        {
-          name: "silver",
-          amount: 300000,
-          duration: 3,
-          description: "3 weeks campaign package",
-          isActive: true,
-        },
-        {
-          name: "gold",
-          amount: 500000,
-          duration: 4,
-          description: "4 weeks campaign package",
+          name: "basic",
+          amount: 7000,
+          priority: 1,
+          description: "Basic package - Standard visibility",
           isActive: true,
         },
       ]);
@@ -50,8 +36,8 @@ export const getAllPackages = CatchAsyncError(
   async (req: Request, res: Response, next: NextFunction) => {
     try {
       const packages = await PackageModel.find({ isActive: true })
-        .select("_id name amount duration description")
-        .sort({ duration: 1 })
+        .select("_id name amount priority description")
+        .sort({ priority: -1 }) // Higher priority first
         .lean();
 
       res.status(200).json({
@@ -90,7 +76,7 @@ export const getPackageById = CatchAsyncError(
 export const createPackage = CatchAsyncError(
   async (req: Request, res: Response, next: NextFunction) => {
     try {
-      const { name, amount, duration, description } = req.body;
+      const { name, amount, priority, description } = req.body;
 
       // Validate required fields
       if (!name || typeof name !== "string" || name.trim() === "") {
@@ -105,10 +91,10 @@ export const createPackage = CatchAsyncError(
         );
       }
 
-      if (!duration || typeof duration !== "number" || duration <= 0) {
+      if (priority === undefined || typeof priority !== "number" || priority < 0) {
         return next(
           new ErrorHandler(
-            "duration is required and must be a positive number (in weeks)",
+            "priority is required and must be a non-negative number",
             400
           )
         );
@@ -132,8 +118,8 @@ export const createPackage = CatchAsyncError(
       const newPackage = await PackageModel.create({
         name: name.trim().toLowerCase(),
         amount,
-        duration,
-        description: description || `${duration} week${duration > 1 ? "s" : ""} campaign package`,
+        priority,
+        description: description || `${name.trim()} package`,
         isActive: true,
       });
 

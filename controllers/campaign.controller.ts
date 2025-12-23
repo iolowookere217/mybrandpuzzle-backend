@@ -20,7 +20,7 @@ export const getActiveCampaigns = CatchAsyncError(
       }
 
       const campaigns = await PuzzleCampaignModel.find(filter)
-        .select("_id brandId packageId gameType title description brandUrl campaignUrl puzzleImageUrl questions words status startDate endDate createdAt")
+        .select("_id brandId packageId gameType title description brandUrl campaignUrl puzzleImageUrl timeLimit questions words status startDate endDate createdAt")
         .lean();
 
       // Fetch brand names and package names for all campaigns
@@ -40,6 +40,7 @@ export const getActiveCampaigns = CatchAsyncError(
             brandUrl: campaign.brandUrl,
             campaignUrl: campaign.campaignUrl,
             puzzleImageUrl: campaign.puzzleImageUrl,
+            timeLimit: campaign.timeLimit,
             questions: campaign.questions,
             words: campaign.words,
             status: campaign.status,
@@ -77,7 +78,7 @@ export const getAllCampaigns = CatchAsyncError(
       }
 
       const campaigns = await PuzzleCampaignModel.find(filter)
-        .select("_id brandId packageId gameType title description brandUrl campaignUrl puzzleImageUrl questions words status startDate endDate createdAt")
+        .select("_id brandId packageId gameType title description brandUrl campaignUrl puzzleImageUrl timeLimit questions words status startDate endDate createdAt")
         .lean();
 
       // Fetch brand names and package names for all campaigns
@@ -97,6 +98,7 @@ export const getAllCampaigns = CatchAsyncError(
             brandUrl: campaign.brandUrl,
             campaignUrl: campaign.campaignUrl,
             puzzleImageUrl: campaign.puzzleImageUrl,
+            timeLimit: campaign.timeLimit,
             questions: campaign.questions,
             words: campaign.words,
             status: campaign.status,
@@ -121,7 +123,7 @@ export const getCampaignsByBrand = CatchAsyncError(
       const { brandId } = req.params;
 
       const campaigns = await PuzzleCampaignModel.find({ brandId })
-        .select("_id brandId packageId gameType title description brandUrl campaignUrl puzzleImageUrl questions words status startDate endDate createdAt")
+        .select("_id brandId packageId gameType title description brandUrl campaignUrl puzzleImageUrl timeLimit questions words status startDate endDate createdAt")
         .lean();
 
       if (!campaigns || campaigns.length === 0) {
@@ -148,6 +150,7 @@ export const getCampaignsByBrand = CatchAsyncError(
             brandUrl: campaign.brandUrl,
             campaignUrl: campaign.campaignUrl,
             puzzleImageUrl: campaign.puzzleImageUrl,
+            timeLimit: campaign.timeLimit,
             questions: campaign.questions,
             words: campaign.words,
             status: campaign.status,
@@ -201,6 +204,7 @@ export const getCampaignById = CatchAsyncError(
             choices: q.choices,
           })),
           words: campaign.words,
+          timeLimit: campaign.timeLimit,
           status: campaign.status,
           startDate: campaign.startDate,
           endDate: campaign.endDate,

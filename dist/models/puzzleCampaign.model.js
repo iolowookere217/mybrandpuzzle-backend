@@ -57,6 +57,7 @@ const puzzleCampaignSchema = new mongoose_1.default.Schema({
         },
     ],
     words: [{ type: String }], // for word_hunt games
+    timeLimit: { type: Number, required: true }, // campaign duration in hours
     status: {
         type: String,
         enum: ["active", "ended", "draft"],

@@ -7,7 +7,7 @@ const mongoose_1 = __importDefault(require("mongoose"));
 const packageSchema = new mongoose_1.default.Schema({
     name: { type: String, required: true, unique: true },
     amount: { type: Number, required: true },
-    duration: { type: Number, required: true }, // in weeks
+    priority: { type: Number, required: true }, // higher = shown first
     description: { type: String },
     isActive: { type: Boolean, default: true },
 }, { timestamps: true });
