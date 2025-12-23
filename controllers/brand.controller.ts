@@ -18,6 +18,10 @@ export const createCampaign = CatchAsyncError(
 
       const { questions, title, description, gameType, words, packageId, brandUrl, campaignUrl } = req.body;
 
+      // Debug logging
+      console.log('Received campaignUrl:', campaignUrl);
+      console.log('Type of campaignUrl:', typeof campaignUrl);
+
       // Validate packageId
       if (!packageId || typeof packageId !== "string") {
         return next(
@@ -226,6 +230,8 @@ export const createCampaign = CatchAsyncError(
         gameType: campaignGameType,
         title: title.trim(),
         description: description.trim(),
+        brandUrl: brandUrl?.trim() || null,
+        campaignUrl: campaignUrl?.trim() || null,
         puzzleImageUrl: puzzleUrl,
         originalImageUrl: originalUrl,
         questions: parsedQuestions,
@@ -233,16 +239,6 @@ export const createCampaign = CatchAsyncError(
         startDate,
         endDate,
       };
-
-      // Add brandUrl if provided
-      if (brandUrl && typeof brandUrl === "string" && brandUrl.trim() !== "") {
-        campaignData.brandUrl = brandUrl.trim();
-      }
-
-      // Add campaignUrl if provided
-      if (campaignUrl && typeof campaignUrl === "string" && campaignUrl.trim() !== "") {
-        campaignData.campaignUrl = campaignUrl.trim();
-      }
 
       // For word_hunt games, add words array
       if (campaignGameType === "word_hunt" && parsedWords.length > 0) {
@@ -257,7 +253,20 @@ export const createCampaign = CatchAsyncError(
         { $push: { campaigns: campaign._id } }
       );
 
-      res.status(201).json({ success: true, campaign });
+      // Convert to plain object to ensure all fields are included
+      const campaignResponse = campaign.toObject();
+
+      // Add package name to response
+      const responseWithPackageName = {
+        ...campaignResponse,
+        packageName: packageData.name,
+      };
+
+      console.log('Campaign created. Has campaignUrl?', 'campaignUrl' in responseWithPackageName);
+      console.log('campaignUrl value in response:', responseWithPackageName.campaignUrl);
+      console.log('brandUrl value in response:', responseWithPackageName.brandUrl);
+
+      res.status(201).json({ success: true, campaign: responseWithPackageName });
     } catch (error: any) {
       return next(new ErrorHandler(error.message, 400));
     }

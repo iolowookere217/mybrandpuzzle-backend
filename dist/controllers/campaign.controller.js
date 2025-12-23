@@ -12,12 +12,13 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.submitCampaign = exports.getCampaignById = exports.getCampaignsByBrand = exports.getAllCampaigns = exports.getActiveCampaigns = void 0;
+exports.submitCampaign = exports.checkCampaignCompletion = exports.getCampaignById = exports.getCampaignsByBrand = exports.getAllCampaigns = exports.getActiveCampaigns = void 0;
 const catchAsyncError_1 = require("../middlewares/catchAsyncError");
 const ErrorHandler_1 = __importDefault(require("../utils/ErrorHandler"));
 const puzzleCampaign_model_1 = __importDefault(require("../models/puzzleCampaign.model"));
 const puzzleAttempt_model_1 = __importDefault(require("../models/puzzleAttempt.model"));
 const user_model_1 = __importDefault(require("../models/user.model"));
+const package_model_1 = __importDefault(require("../models/package.model"));
 // Get active campaigns only (with brand name included)
 exports.getActiveCampaigns = (0, catchAsyncError_1.CatchAsyncError)((req, res, next) => __awaiter(void 0, void 0, void 0, function* () {
     try {
@@ -31,13 +32,15 @@ exports.getActiveCampaigns = (0, catchAsyncError_1.CatchAsyncError)((req, res, n
         const campaigns = yield puzzleCampaign_model_1.default.find(filter)
             .select("_id brandId packageId gameType title description brandUrl campaignUrl puzzleImageUrl questions words status startDate endDate createdAt")
             .lean();
-        // Fetch brand names for all campaigns
+        // Fetch brand names and package names for all campaigns
         const campaignsWithBrand = yield Promise.all(campaigns.map((campaign) => __awaiter(void 0, void 0, void 0, function* () {
             const brand = yield user_model_1.default.findById(campaign.brandId).select("name companyName").lean();
+            const packageData = yield package_model_1.default.findById(campaign.packageId).select("name").lean();
             return {
                 _id: campaign._id,
                 brandId: campaign.brandId,
                 packageId: campaign.packageId,
+                packageName: (packageData === null || packageData === void 0 ? void 0 : packageData.name) || null,
                 brandName: (brand === null || brand === void 0 ? void 0 : brand.companyName) || (brand === null || brand === void 0 ? void 0 : brand.name) || "Unknown Brand",
                 gameType: campaign.gameType,
                 title: campaign.title,
@@ -77,13 +80,15 @@ exports.getAllCampaigns = (0, catchAsyncError_1.CatchAsyncError)((req, res, next
         const campaigns = yield puzzleCampaign_model_1.default.find(filter)
             .select("_id brandId packageId gameType title description brandUrl campaignUrl puzzleImageUrl questions words status startDate endDate createdAt")
             .lean();
-        // Fetch brand names for all campaigns
+        // Fetch brand names and package names for all campaigns
         const campaignsWithBrand = yield Promise.all(campaigns.map((campaign) => __awaiter(void 0, void 0, void 0, function* () {
             const brand = yield user_model_1.default.findById(campaign.brandId).select("name companyName").lean();
+            const packageData = yield package_model_1.default.findById(campaign.packageId).select("name").lean();
             return {
                 _id: campaign._id,
                 brandId: campaign.brandId,
                 packageId: campaign.packageId,
+                packageName: (packageData === null || packageData === void 0 ? void 0 : packageData.name) || null,
                 brandName: (brand === null || brand === void 0 ? void 0 : brand.companyName) || (brand === null || brand === void 0 ? void 0 : brand.name) || "Unknown Brand",
                 gameType: campaign.gameType,
                 title: campaign.title,
@@ -118,24 +123,29 @@ exports.getCampaignsByBrand = (0, catchAsyncError_1.CatchAsyncError)((req, res, 
         // Fetch brand name
         const brand = yield user_model_1.default.findById(brandId).select("name companyName").lean();
         const brandName = (brand === null || brand === void 0 ? void 0 : brand.companyName) || (brand === null || brand === void 0 ? void 0 : brand.name) || "Unknown Brand";
-        const campaignsWithBrand = campaigns.map((campaign) => ({
-            _id: campaign._id,
-            brandId: campaign.brandId,
-            packageId: campaign.packageId,
-            brandName,
-            gameType: campaign.gameType,
-            title: campaign.title,
-            description: campaign.description,
-            brandUrl: campaign.brandUrl,
-            campaignUrl: campaign.campaignUrl,
-            puzzleImageUrl: campaign.puzzleImageUrl,
-            questions: campaign.questions,
-            words: campaign.words,
-            status: campaign.status,
-            startDate: campaign.startDate,
-            endDate: campaign.endDate,
-            createdAt: campaign.createdAt,
-        }));
+        // Fetch package names for all campaigns
+        const campaignsWithBrand = yield Promise.all(campaigns.map((campaign) => __awaiter(void 0, void 0, void 0, function* () {
+            const packageData = yield package_model_1.default.findById(campaign.packageId).select("name").lean();
+            return {
+                _id: campaign._id,
+                brandId: campaign.brandId,
+                packageId: campaign.packageId,
+                packageName: (packageData === null || packageData === void 0 ? void 0 : packageData.name) || null,
+                brandName,
+                gameType: campaign.gameType,
+                title: campaign.title,
+                description: campaign.description,
+                brandUrl: campaign.brandUrl,
+                campaignUrl: campaign.campaignUrl,
+                puzzleImageUrl: campaign.puzzleImageUrl,
+                questions: campaign.questions,
+                words: campaign.words,
+                status: campaign.status,
+                startDate: campaign.startDate,
+                endDate: campaign.endDate,
+                createdAt: campaign.createdAt,
+            };
+        })));
         res.status(200).json({ success: true, campaigns: campaignsWithBrand });
     }
     catch (error) {
@@ -150,15 +160,17 @@ exports.getCampaignById = (0, catchAsyncError_1.CatchAsyncError)((req, res, next
         if (!campaign) {
             return next(new ErrorHandler_1.default("Campaign not found", 404));
         }
-        // Fetch brand name
+        // Fetch brand name and package name
         const brand = yield user_model_1.default.findById(campaign.brandId).select("name companyName").lean();
         const brandName = (brand === null || brand === void 0 ? void 0 : brand.companyName) || (brand === null || brand === void 0 ? void 0 : brand.name) || "Unknown Brand";
+        const packageData = yield package_model_1.default.findById(campaign.packageId).select("name").lean();
         res.status(200).json({
             success: true,
             campaign: {
                 _id: campaign._id,
                 brandId: campaign.brandId,
                 packageId: campaign.packageId,
+                packageName: (packageData === null || packageData === void 0 ? void 0 : packageData.name) || null,
                 brandName,
                 gameType: campaign.gameType,
                 title: campaign.title,
@@ -177,6 +189,31 @@ exports.getCampaignById = (0, catchAsyncError_1.CatchAsyncError)((req, res, next
                 endDate: campaign.endDate,
                 createdAt: campaign.createdAt,
             },
+        });
+    }
+    catch (error) {
+        return next(new ErrorHandler_1.default(error.message, 400));
+    }
+}));
+// Check if current user has completed a campaign
+exports.checkCampaignCompletion = (0, catchAsyncError_1.CatchAsyncError)((req, res, next) => __awaiter(void 0, void 0, void 0, function* () {
+    try {
+        const { campaignId } = req.params;
+        const user = req.user;
+        const userId = user && user._id ? String(user._id) : undefined;
+        if (!userId) {
+            return next(new ErrorHandler_1.default("User not authenticated", 401));
+        }
+        // Check if user has already solved this campaign
+        const previousAttempt = yield puzzleAttempt_model_1.default.findOne({
+            userId: userId,
+            campaignId: campaignId,
+            solved: true,
+        }).lean();
+        const hasCompletedByCurrentUser = !!previousAttempt;
+        res.status(200).json({
+            success: true,
+            hasCompletedByCurrentUser,
         });
     }
     catch (error) {

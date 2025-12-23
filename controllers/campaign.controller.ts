@@ -4,6 +4,7 @@ import ErrorHandler from "../utils/ErrorHandler";
 import PuzzleCampaignModel from "../models/puzzleCampaign.model";
 import PuzzleAttemptModel from "../models/puzzleAttempt.model";
 import UserModel from "../models/user.model";
+import PackageModel from "../models/package.model";
 
 // Get active campaigns only (with brand name included)
 export const getActiveCampaigns = CatchAsyncError(
@@ -22,14 +23,16 @@ export const getActiveCampaigns = CatchAsyncError(
         .select("_id brandId packageId gameType title description brandUrl campaignUrl puzzleImageUrl questions words status startDate endDate createdAt")
         .lean();
 
-      // Fetch brand names for all campaigns
+      // Fetch brand names and package names for all campaigns
       const campaignsWithBrand = await Promise.all(
         campaigns.map(async (campaign) => {
           const brand = await UserModel.findById(campaign.brandId).select("name companyName").lean();
+          const packageData = await PackageModel.findById(campaign.packageId).select("name").lean();
           return {
             _id: campaign._id,
             brandId: campaign.brandId,
             packageId: campaign.packageId,
+            packageName: packageData?.name || null,
             brandName: brand?.companyName || brand?.name || "Unknown Brand",
             gameType: campaign.gameType,
             title: campaign.title,
@@ -77,14 +80,16 @@ export const getAllCampaigns = CatchAsyncError(
         .select("_id brandId packageId gameType title description brandUrl campaignUrl puzzleImageUrl questions words status startDate endDate createdAt")
         .lean();
 
-      // Fetch brand names for all campaigns
+      // Fetch brand names and package names for all campaigns
       const campaignsWithBrand = await Promise.all(
         campaigns.map(async (campaign) => {
           const brand = await UserModel.findById(campaign.brandId).select("name companyName").lean();
+          const packageData = await PackageModel.findById(campaign.packageId).select("name").lean();
           return {
             _id: campaign._id,
             brandId: campaign.brandId,
             packageId: campaign.packageId,
+            packageName: packageData?.name || null,
             brandName: brand?.companyName || brand?.name || "Unknown Brand",
             gameType: campaign.gameType,
             title: campaign.title,
@@ -127,24 +132,31 @@ export const getCampaignsByBrand = CatchAsyncError(
       const brand = await UserModel.findById(brandId).select("name companyName").lean();
       const brandName = brand?.companyName || brand?.name || "Unknown Brand";
 
-      const campaignsWithBrand = campaigns.map((campaign) => ({
-        _id: campaign._id,
-        brandId: campaign.brandId,
-        packageId: campaign.packageId,
-        brandName,
-        gameType: campaign.gameType,
-        title: campaign.title,
-        description: campaign.description,
-        brandUrl: campaign.brandUrl,
-        campaignUrl: campaign.campaignUrl,
-        puzzleImageUrl: campaign.puzzleImageUrl,
-        questions: campaign.questions,
-        words: campaign.words,
-        status: campaign.status,
-        startDate: campaign.startDate,
-        endDate: campaign.endDate,
-        createdAt: (campaign as any).createdAt,
-      }));
+      // Fetch package names for all campaigns
+      const campaignsWithBrand = await Promise.all(
+        campaigns.map(async (campaign) => {
+          const packageData = await PackageModel.findById(campaign.packageId).select("name").lean();
+          return {
+            _id: campaign._id,
+            brandId: campaign.brandId,
+            packageId: campaign.packageId,
+            packageName: packageData?.name || null,
+            brandName,
+            gameType: campaign.gameType,
+            title: campaign.title,
+            description: campaign.description,
+            brandUrl: campaign.brandUrl,
+            campaignUrl: campaign.campaignUrl,
+            puzzleImageUrl: campaign.puzzleImageUrl,
+            questions: campaign.questions,
+            words: campaign.words,
+            status: campaign.status,
+            startDate: campaign.startDate,
+            endDate: campaign.endDate,
+            createdAt: (campaign as any).createdAt,
+          };
+        })
+      );
 
       res.status(200).json({ success: true, campaigns: campaignsWithBrand });
     } catch (error: any) {
@@ -164,9 +176,10 @@ export const getCampaignById = CatchAsyncError(
         return next(new ErrorHandler("Campaign not found", 404));
       }
 
-      // Fetch brand name
+      // Fetch brand name and package name
       const brand = await UserModel.findById(campaign.brandId).select("name companyName").lean();
       const brandName = brand?.companyName || brand?.name || "Unknown Brand";
+      const packageData = await PackageModel.findById(campaign.packageId).select("name").lean();
 
       res.status(200).json({
         success: true,
@@ -174,6 +187,7 @@ export const getCampaignById = CatchAsyncError(
           _id: campaign._id,
           brandId: campaign.brandId,
           packageId: campaign.packageId,
+          packageName: packageData?.name || null,
           brandName,
           gameType: campaign.gameType,
           title: campaign.title,
@@ -192,6 +206,37 @@ export const getCampaignById = CatchAsyncError(
           endDate: campaign.endDate,
           createdAt: (campaign as any).createdAt,
         },
+      });
+    } catch (error: any) {
+      return next(new ErrorHandler(error.message, 400));
+    }
+  }
+);
+
+// Check if current user has completed a campaign
+export const checkCampaignCompletion = CatchAsyncError(
+  async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const { campaignId } = req.params;
+      const user = req.user as any;
+      const userId = user && user._id ? String(user._id) : undefined;
+
+      if (!userId) {
+        return next(new ErrorHandler("User not authenticated", 401));
+      }
+
+      // Check if user has already solved this campaign
+      const previousAttempt = await PuzzleAttemptModel.findOne({
+        userId: userId,
+        campaignId: campaignId,
+        solved: true,
+      }).lean();
+
+      const hasCompletedByCurrentUser = !!previousAttempt;
+
+      res.status(200).json({
+        success: true,
+        hasCompletedByCurrentUser,
       });
     } catch (error: any) {
       return next(new ErrorHandler(error.message, 400));

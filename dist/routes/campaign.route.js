@@ -13,6 +13,8 @@ router.get("/campaigns", auth_1.isAuthenticated, campaign_controller_1.getAllCam
 router.get("/campaigns/active", auth_1.isAuthenticated, campaign_controller_1.getActiveCampaigns);
 // Get campaigns by brand ID
 router.get("/campaigns/brand/:brandId", auth_1.isAuthenticated, campaign_controller_1.getCampaignsByBrand);
+// Check if current user has completed a campaign
+router.get("/campaigns/:campaignId/completion", auth_1.isAuthenticated, campaign_controller_1.checkCampaignCompletion);
 // Get single campaign by campaign ID
 router.get("/campaigns/:campaignId", auth_1.isAuthenticated, campaign_controller_1.getCampaignById);
 // Submit campaign result
