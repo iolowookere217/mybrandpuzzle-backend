@@ -12,7 +12,7 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.updateBrandProfile = exports.updateGamerProfile = exports.getBrandProfile = exports.getGamerProfile = exports.getUserInfo = exports.updateAccessToken = exports.logoutUser = exports.loginUser = exports.activateUser = exports.createActivationToken = exports.registerUser = void 0;
+exports.getAllGamers = exports.updateBrandProfile = exports.updateGamerProfile = exports.getBrandProfile = exports.getGamerProfile = exports.getUserInfo = exports.updateAccessToken = exports.logoutUser = exports.loginUser = exports.activateUser = exports.createActivationToken = exports.registerUser = void 0;
 const user_model_1 = __importDefault(require("../models/user.model"));
 const ErrorHandler_1 = __importDefault(require("../utils/ErrorHandler"));
 const catchAsyncError_1 = require("../middlewares/catchAsyncError");
@@ -423,6 +423,36 @@ exports.updateBrandProfile = (0, catchAsyncError_1.CatchAsyncError)((req, res, n
                 isVerified: updatedUser.isVerified,
             },
         });
+    }
+    catch (error) {
+        return next(new ErrorHandler_1.default(error.message, 400));
+    }
+}));
+// Get all gamers
+exports.getAllGamers = (0, catchAsyncError_1.CatchAsyncError)((req, res, next) => __awaiter(void 0, void 0, void 0, function* () {
+    try {
+        // Find all users who are NOT brands or admins (includes users with role 'gamer' or no role set)
+        const gamerUsers = yield user_model_1.default.find({
+            role: { $nin: ["brand", "admin"] }
+        })
+            .select("_id firstName lastName username email avatar isVerified analytics puzzlesSolved createdAt")
+            .lean();
+        const gamers = gamerUsers.map((gamer) => {
+            var _a;
+            return ({
+                _id: gamer._id,
+                firstName: gamer.firstName,
+                lastName: gamer.lastName,
+                username: gamer.username,
+                email: gamer.email,
+                avatar: gamer.avatar,
+                isVerified: gamer.isVerified,
+                analytics: gamer.analytics,
+                totalPuzzlesSolved: ((_a = gamer.puzzlesSolved) === null || _a === void 0 ? void 0 : _a.length) || 0,
+                createdAt: gamer.createdAt,
+            });
+        });
+        res.status(200).json({ success: true, gamers });
     }
     catch (error) {
         return next(new ErrorHandler_1.default(error.message, 400));

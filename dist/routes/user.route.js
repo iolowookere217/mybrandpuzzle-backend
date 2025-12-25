@@ -7,6 +7,8 @@ const express_1 = __importDefault(require("express"));
 const user_controller_1 = require("../controllers/user.controller");
 const auth_1 = require("../utils/auth");
 const userRouter = express_1.default.Router();
+// Get all gamers
+userRouter.get("/gamers", user_controller_1.getAllGamers);
 userRouter.post("/registration", user_controller_1.registerUser);
 userRouter.post("/activate-user", user_controller_1.activateUser);
 userRouter.post("/login", user_controller_1.loginUser);

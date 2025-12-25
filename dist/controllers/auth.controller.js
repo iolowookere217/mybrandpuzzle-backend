@@ -56,7 +56,7 @@ exports.googleAuth = (0, catchAsyncError_1.CatchAsyncError)((req, res, next) => 
             const firstName = nameParts[0] || fullName;
             const lastName = nameParts.slice(1).join(" ") || "";
             const username = yield (0, userHelpers_1.generateUsername)(profile.email);
-            const avatar = profile.picture || (0, userHelpers_1.generateAvatar)();
+            const avatar = profile.picture || (0, userHelpers_1.generateAvatar)(`${firstName} ${lastName}`.trim() || profile.email);
             user = yield user_model_1.default.create({
                 firstName,
                 lastName,
@@ -92,7 +92,7 @@ exports.registerGamer = (0, catchAsyncError_1.CatchAsyncError)((req, res, next) 
         if (existing)
             return next(new ErrorHandler_1.default("Email already exists", 400));
         const username = yield (0, userHelpers_1.generateUsername)(email);
-        const avatar = (0, userHelpers_1.generateAvatar)();
+        const avatar = (0, userHelpers_1.generateAvatar)(`${firstName} ${lastName || ''}`.trim() || email);
         // Create activation token BEFORE creating user
         const activationToken = (0, user_controller_1.createActivationToken)({
             firstName,
@@ -166,7 +166,7 @@ exports.activateGamer = (0, catchAsyncError_1.CatchAsyncError)((req, res, next) 
         }
         // create new gamer account
         const username = yield (0, userHelpers_1.generateUsername)(email);
-        const avatar = (0, userHelpers_1.generateAvatar)();
+        const avatar = (0, userHelpers_1.generateAvatar)(`${firstName} ${lastName || ''}`.trim() || email);
         const user = yield user_model_1.default.create({
             firstName,
             lastName: lastName || "",

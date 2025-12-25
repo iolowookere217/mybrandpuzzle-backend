@@ -554,3 +554,34 @@ export const updateBrandProfile = CatchAsyncError(
     }
   }
 );
+
+// Get all gamers
+export const getAllGamers = CatchAsyncError(
+  async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      // Find all users who are NOT brands or admins (includes users with role 'gamer' or no role set)
+      const gamerUsers = await userModel.find({
+        role: { $nin: ["brand", "admin"] }
+      })
+        .select("_id firstName lastName username email avatar isVerified analytics puzzlesSolved createdAt")
+        .lean();
+
+      const gamers = gamerUsers.map((gamer) => ({
+        _id: gamer._id,
+        firstName: gamer.firstName,
+        lastName: gamer.lastName,
+        username: gamer.username,
+        email: gamer.email,
+        avatar: gamer.avatar,
+        isVerified: gamer.isVerified,
+        analytics: gamer.analytics,
+        totalPuzzlesSolved: gamer.puzzlesSolved?.length || 0,
+        createdAt: (gamer as any).createdAt,
+      }));
+
+      res.status(200).json({ success: true, gamers });
+    } catch (error: any) {
+      return next(new ErrorHandler(error.message, 400));
+    }
+  }
+);

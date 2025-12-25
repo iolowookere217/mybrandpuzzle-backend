@@ -9,12 +9,15 @@ import {
   getGamerProfile,
   getBrandProfile,
   updateGamerProfile,
-  updateBrandProfile
+  updateBrandProfile,
+  getAllGamers
 } from "../controllers/user.controller";
 import { isAuthenticated } from "../utils/auth";
 
 const userRouter = express.Router();
 
+// Get all gamers
+userRouter.get("/gamers", getAllGamers);
 
 userRouter.post("/registration", registerUser);
 

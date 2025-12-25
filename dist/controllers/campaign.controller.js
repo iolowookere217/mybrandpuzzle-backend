@@ -185,6 +185,7 @@ exports.getCampaignById = (0, catchAsyncError_1.CatchAsyncError)((req, res, next
                 questions: campaign.questions.map((q) => ({
                     question: q.question,
                     choices: q.choices,
+                    correctIndex: q.correctIndex,
                 })),
                 words: campaign.words,
                 timeLimit: campaign.timeLimit,

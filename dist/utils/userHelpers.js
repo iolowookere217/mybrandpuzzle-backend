@@ -25,9 +25,22 @@ const generateUsername = (email) => __awaiter(void 0, void 0, void 0, function* 
     return username;
 });
 exports.generateUsername = generateUsername;
-const generateAvatar = () => {
+const generateAvatar = (nameOrEmail) => {
+    // Generate unique avatar using UI Avatars with user's name/email
     const colors = ["FF6B6B", "4ECDC4", "45B7D1", "FFA07A", "98D8C8", "F7DC6F", "BB8FCE", "85C1E2"];
-    const randomColor = colors[Math.floor(Math.random() * colors.length)];
-    return `https://ui-avatars.com/api/?background=${randomColor}&color=fff&bold=true&size=200&name=User`;
+    // Use a simple hash to consistently pick a color based on the input
+    let hash = 0;
+    for (let i = 0; i < nameOrEmail.length; i++) {
+        hash = nameOrEmail.charCodeAt(i) + ((hash << 5) - hash);
+    }
+    const colorIndex = Math.abs(hash) % colors.length;
+    const backgroundColor = colors[colorIndex];
+    // Extract name for initials - if it's an email, use the part before @
+    const displayName = nameOrEmail.includes('@')
+        ? nameOrEmail.split('@')[0]
+        : nameOrEmail;
+    // Encode the name for URL safety
+    const encodedName = encodeURIComponent(displayName);
+    return `https://ui-avatars.com/api/?background=${backgroundColor}&color=fff&bold=true&size=200&name=${encodedName}`;
 };
 exports.generateAvatar = generateAvatar;

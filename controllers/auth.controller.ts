@@ -52,7 +52,7 @@ export const googleAuth = CatchAsyncError(
         const lastName = nameParts.slice(1).join(" ") || "";
 
         const username = await generateUsername(profile.email);
-        const avatar = profile.picture || generateAvatar();
+        const avatar = profile.picture || generateAvatar(`${firstName} ${lastName}`.trim() || profile.email);
 
         user = await UserModel.create({
           firstName,
@@ -97,7 +97,7 @@ export const registerGamer = CatchAsyncError(
       if (existing) return next(new ErrorHandler("Email already exists", 400));
 
       const username = await generateUsername(email);
-      const avatar = generateAvatar();
+      const avatar = generateAvatar(`${firstName} ${lastName || ''}`.trim() || email);
 
       // Create activation token BEFORE creating user
       const activationToken = createActivationToken({
@@ -197,7 +197,7 @@ export const activateGamer = CatchAsyncError(
 
       // create new gamer account
       const username = await generateUsername(email);
-      const avatar = generateAvatar();
+      const avatar = generateAvatar(`${firstName} ${lastName || ''}`.trim() || email);
 
       const user = await UserModel.create({
         firstName,

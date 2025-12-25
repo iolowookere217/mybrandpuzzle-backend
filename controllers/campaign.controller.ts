@@ -202,6 +202,7 @@ export const getCampaignById = CatchAsyncError(
           questions: campaign.questions.map((q: any) => ({
             question: q.question,
             choices: q.choices,
+            correctIndex: q.correctIndex,
           })),
           words: campaign.words,
           timeLimit: campaign.timeLimit,
