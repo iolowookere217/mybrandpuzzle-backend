@@ -12,7 +12,7 @@ const router = express.Router();
 const upload = multer({ storage: multer.memoryStorage() });
 
 // Get all brands
-router.get("/brands", isAuthenticated, getAllBrands);
+router.get("/brands", getAllBrands);
 
 router.post(
   "/brands/campaigns",

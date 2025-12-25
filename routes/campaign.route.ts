@@ -12,19 +12,19 @@ import { isAuthenticated } from "../utils/auth";
 const router = express.Router();
 
 // Get all campaigns
-router.get("/campaigns", isAuthenticated, getAllCampaigns);
+router.get("/campaigns", getAllCampaigns);
 
 // Get active campaigns only
-router.get("/campaigns/active", isAuthenticated, getActiveCampaigns);
+router.get("/campaigns/active", getActiveCampaigns);
 
 // Get campaigns by brand ID
-router.get("/campaigns/brand/:brandId", isAuthenticated, getCampaignsByBrand);
+router.get("/campaigns/brand/:brandId", getCampaignsByBrand);
 
 // Check if current user has completed a campaign
 router.get("/campaigns/:campaignId/completion", isAuthenticated, checkCampaignCompletion);
 
 // Get single campaign by campaign ID
-router.get("/campaigns/:campaignId", isAuthenticated, getCampaignById);
+router.get("/campaigns/:campaignId", getCampaignById);
 
 // Submit campaign result
 router.post("/campaigns/:campaignId/submit", isAuthenticated, submitCampaign);
