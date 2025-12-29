@@ -67,6 +67,14 @@ const puzzleCampaignSchema = new mongoose_1.default.Schema({
     startDate: { type: Date, required: true },
     endDate: { type: Date, required: true },
     analytics: { type: mongoose_1.Schema.Types.Mixed, default: {} },
+    // Payment/Budget tracking
+    packageType: { type: String, enum: ["basic", "premium"] },
+    totalBudget: { type: Number, default: 0 },
+    dailyAllocation: { type: Number, default: 0 },
+    budgetUsed: { type: Number, default: 0 },
+    budgetRemaining: { type: Number, default: 0 },
+    paymentStatus: { type: String, enum: ["unpaid", "paid", "partial"], default: "unpaid" },
+    transactionId: { type: String },
 }, { timestamps: true });
 // index for quick analytics by brand
 puzzleCampaignSchema.index({ brandId: 1 });

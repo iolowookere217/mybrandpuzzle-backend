@@ -53,7 +53,7 @@ export const getActiveCampaigns = CatchAsyncError(
 
       res.status(200).json({ success: true, campaigns: campaignsWithBrand });
     } catch (error: any) {
-      return next(new ErrorHandler(error.message, 400));
+      return next(new ErrorHandler(`Failed to fetch active campaigns: ${error.message}`, 500));
     }
   }
 );
@@ -111,7 +111,7 @@ export const getAllCampaigns = CatchAsyncError(
 
       res.status(200).json({ success: true, campaigns: campaignsWithBrand });
     } catch (error: any) {
-      return next(new ErrorHandler(error.message, 400));
+      return next(new ErrorHandler(`Failed to fetch campaigns: ${error.message}`, 500));
     }
   }
 );
@@ -163,7 +163,7 @@ export const getCampaignsByBrand = CatchAsyncError(
 
       res.status(200).json({ success: true, campaigns: campaignsWithBrand });
     } catch (error: any) {
-      return next(new ErrorHandler(error.message, 400));
+      return next(new ErrorHandler(`Failed to fetch campaigns for brand: ${error.message}`, 500));
     }
   }
 );
@@ -213,7 +213,7 @@ export const getCampaignById = CatchAsyncError(
         },
       });
     } catch (error: any) {
-      return next(new ErrorHandler(error.message, 400));
+      return next(new ErrorHandler(`Failed to fetch campaign details: ${error.message}`, 500));
     }
   }
 );
@@ -244,7 +244,7 @@ export const checkCampaignCompletion = CatchAsyncError(
         hasCompletedByCurrentUser,
       });
     } catch (error: any) {
-      return next(new ErrorHandler(error.message, 400));
+      return next(new ErrorHandler(`Failed to check campaign completion status: ${error.message}`, 500));
     }
   }
 );
@@ -267,7 +267,7 @@ export const submitCampaign = CatchAsyncError(
 
       const campaign = await PuzzleCampaignModel.findById(campaignId);
       if (!campaign) {
-        return next(new ErrorHandler("Campaign not found", 404));
+        return next(new ErrorHandler("Campaign not found. Please check the campaign ID and try again.", 404));
       }
 
       // compute quiz score
@@ -422,7 +422,7 @@ export const submitCampaign = CatchAsyncError(
         gameType: campaign.gameType,
       });
     } catch (error: any) {
-      return next(new ErrorHandler(error.message, 400));
+      return next(new ErrorHandler(`Failed to submit campaign result: ${error.message}`, 500));
     }
   }
 );

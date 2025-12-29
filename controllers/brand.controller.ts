@@ -276,7 +276,7 @@ export const createCampaign = CatchAsyncError(
 
       res.status(201).json({ success: true, campaign: responseWithPackageName });
     } catch (error: any) {
-      return next(new ErrorHandler(error.message, 400));
+      return next(new ErrorHandler(`Failed to create campaign: ${error.message}`, 500));
     }
   }
 );
@@ -340,7 +340,7 @@ export const getCampaignAnalytics = CatchAsyncError(
 
       res.status(200).json({ success: true, campaigns: campaignsAnalytics });
     } catch (error: any) {
-      return next(new ErrorHandler(error.message, 400));
+      return next(new ErrorHandler(`Failed to fetch campaign analytics: ${error.message}`, 500));
     }
   }
 );
@@ -383,7 +383,7 @@ export const getAllBrands = CatchAsyncError(
 
       res.status(200).json({ success: true, brands });
     } catch (error: any) {
-      return next(new ErrorHandler(error.message, 400));
+      return next(new ErrorHandler(`Failed to fetch brands: ${error.message}`, 500));
     }
   }
 );

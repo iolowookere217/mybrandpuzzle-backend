@@ -218,7 +218,7 @@ exports.createCampaign = (0, catchAsyncError_1.CatchAsyncError)((req, res, next)
         res.status(201).json({ success: true, campaign: responseWithPackageName });
     }
     catch (error) {
-        return next(new ErrorHandler_1.default(error.message, 400));
+        return next(new ErrorHandler_1.default(`Failed to create campaign: ${error.message}`, 500));
     }
 }));
 exports.getCampaignAnalytics = (0, catchAsyncError_1.CatchAsyncError)((req, res, next) => __awaiter(void 0, void 0, void 0, function* () {
@@ -269,7 +269,7 @@ exports.getCampaignAnalytics = (0, catchAsyncError_1.CatchAsyncError)((req, res,
         res.status(200).json({ success: true, campaigns: campaignsAnalytics });
     }
     catch (error) {
-        return next(new ErrorHandler_1.default(error.message, 400));
+        return next(new ErrorHandler_1.default(`Failed to fetch campaign analytics: ${error.message}`, 500));
     }
 }));
 // Get all brands
@@ -305,6 +305,6 @@ exports.getAllBrands = (0, catchAsyncError_1.CatchAsyncError)((req, res, next) =
         res.status(200).json({ success: true, brands });
     }
     catch (error) {
-        return next(new ErrorHandler_1.default(error.message, 400));
+        return next(new ErrorHandler_1.default(`Failed to fetch brands: ${error.message}`, 500));
     }
 }));

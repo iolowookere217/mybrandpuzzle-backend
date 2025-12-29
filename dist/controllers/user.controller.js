@@ -114,17 +114,17 @@ exports.loginUser = (0, catchAsyncError_1.CatchAsyncError)((req, res, next) => _
         }
         const user = yield user_model_1.default.findOne({ email }).select("+password");
         if (!user) {
-            return next(new ErrorHandler_1.default("Invalid email or password", 403));
+            return next(new ErrorHandler_1.default("Invalid email or password. Please check your credentials and try again.", 401));
         }
         //check password
         const isPasswordMatch = yield ((_a = user.comparePassword) === null || _a === void 0 ? void 0 : _a.call(user, password));
         if (!isPasswordMatch) {
-            return next(new ErrorHandler_1.default("Invalid email or password", 403));
+            return next(new ErrorHandler_1.default("Invalid email or password. Please check your credentials and try again.", 401));
         }
         (0, jwt_1.sendToken)(user, 200, res);
     }
     catch (error) {
-        return next(new ErrorHandler_1.default(error.message, 403));
+        return next(new ErrorHandler_1.default(`Login failed: ${error.message}`, 500));
     }
 }));
 //logout user

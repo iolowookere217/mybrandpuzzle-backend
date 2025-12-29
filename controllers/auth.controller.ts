@@ -74,7 +74,7 @@ export const googleAuth = CatchAsyncError(
 
       sendToken(user, 200, res);
     } catch (error: any) {
-      return next(new ErrorHandler(error.message, 400));
+      return next(new ErrorHandler(`Google authentication failed: ${error.message}`, 500));
     }
   }
 );
@@ -94,7 +94,7 @@ export const registerGamer = CatchAsyncError(
       }
 
       const existing = await UserModel.findOne({ email });
-      if (existing) return next(new ErrorHandler("Email already exists", 400));
+      if (existing) return next(new ErrorHandler("This email is already registered. Please use a different email or try logging in.", 409));
 
       const username = await generateUsername(email);
       const avatar = generateAvatar(`${firstName} ${lastName || ''}`.trim() || email);
@@ -150,7 +150,7 @@ export const registerGamer = CatchAsyncError(
         );
       }
     } catch (error: any) {
-      return next(new ErrorHandler(error.message, 400));
+      return next(new ErrorHandler(`Gamer registration failed: ${error.message}`, 500));
     }
   }
 );
@@ -212,7 +212,7 @@ export const activateGamer = CatchAsyncError(
 
       sendToken(user, 201, res);
     } catch (error: any) {
-      return next(new ErrorHandler(error.message, 400));
+      return next(new ErrorHandler(`Account activation failed: ${error.message}`, 500));
     }
   }
 );
@@ -223,18 +223,18 @@ export const login = CatchAsyncError(
     try {
       const { email, password } = req.body;
       if (!email || !password)
-        return next(new ErrorHandler("Missing email or password", 400));
+        return next(new ErrorHandler("Please provide both email and password", 400));
 
       const user = await UserModel.findOne({ email }).select("+password");
       if (!user)
-        return next(new ErrorHandler("Invalid credentials", 403));
+        return next(new ErrorHandler("Invalid email or password. Please check your credentials and try again.", 401));
 
       const match = await user.comparePassword!(password);
-      if (!match) return next(new ErrorHandler("Invalid credentials", 403));
+      if (!match) return next(new ErrorHandler("Invalid email or password. Please check your credentials and try again.", 401));
 
       sendToken(user, 200, res);
     } catch (error: any) {
-      return next(new ErrorHandler(error.message, 400));
+      return next(new ErrorHandler(`Login failed: ${error.message}`, 500));
     }
   }
 );
@@ -245,11 +245,11 @@ export const registerBrand = CatchAsyncError(
     try {
       const { name, email, password, companyName } = req.body;
       if (!email || !password || !companyName) {
-        return next(new ErrorHandler("Missing required fields", 400));
+        return next(new ErrorHandler("Missing required fields: email, password, and companyName are required", 400));
       }
 
       const existing = await UserModel.findOne({ email });
-      if (existing) return next(new ErrorHandler("Email already exists", 400));
+      if (existing) return next(new ErrorHandler("This email is already registered. Please use a different email or try logging in.", 409));
 
       // Create activation token BEFORE creating user
       const activationToken = createActivationToken({
@@ -308,7 +308,7 @@ export const registerBrand = CatchAsyncError(
         );
       }
     } catch (error: any) {
-      return next(new ErrorHandler(error.message, 400));
+      return next(new ErrorHandler(`Brand registration failed: ${error.message}`, 500));
     }
   }
 );
@@ -386,7 +386,7 @@ export const activateBrand = CatchAsyncError(
 
       sendToken(user, 201, res);
     } catch (error: any) {
-      return next(new ErrorHandler(error.message, 400));
+      return next(new ErrorHandler(`Brand activation failed: ${error.message}`, 500));
     }
   }
 );
@@ -442,7 +442,7 @@ export const resendGamerActivation = CatchAsyncError(
         activationToken: activationToken.token,
       });
     } catch (error: any) {
-      return next(new ErrorHandler(error.message, 400));
+      return next(new ErrorHandler(`Failed to resend activation email: ${error.message}`, 500));
     }
   }
 );
@@ -498,7 +498,7 @@ export const resendBrandActivation = CatchAsyncError(
         activationToken: activationToken.token,
       });
     } catch (error: any) {
-      return next(new ErrorHandler(error.message, 400));
+      return next(new ErrorHandler(`Failed to resend activation email: ${error.message}`, 500));
     }
   }
 );

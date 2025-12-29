@@ -78,7 +78,7 @@ exports.googleAuth = (0, catchAsyncError_1.CatchAsyncError)((req, res, next) => 
         (0, jwt_1.sendToken)(user, 200, res);
     }
     catch (error) {
-        return next(new ErrorHandler_1.default(error.message, 400));
+        return next(new ErrorHandler_1.default(`Google authentication failed: ${error.message}`, 500));
     }
 }));
 // Gamer email signup (email + password registration)
@@ -90,7 +90,7 @@ exports.registerGamer = (0, catchAsyncError_1.CatchAsyncError)((req, res, next) 
         }
         const existing = yield user_model_1.default.findOne({ email });
         if (existing)
-            return next(new ErrorHandler_1.default("Email already exists", 400));
+            return next(new ErrorHandler_1.default("This email is already registered. Please use a different email or try logging in.", 409));
         const username = yield (0, userHelpers_1.generateUsername)(email);
         const avatar = (0, userHelpers_1.generateAvatar)(`${firstName} ${lastName || ''}`.trim() || email);
         // Create activation token BEFORE creating user
@@ -135,7 +135,7 @@ exports.registerGamer = (0, catchAsyncError_1.CatchAsyncError)((req, res, next) 
         }
     }
     catch (error) {
-        return next(new ErrorHandler_1.default(error.message, 400));
+        return next(new ErrorHandler_1.default(`Gamer registration failed: ${error.message}`, 500));
     }
 }));
 // Gamer email activation
@@ -180,7 +180,7 @@ exports.activateGamer = (0, catchAsyncError_1.CatchAsyncError)((req, res, next) 
         (0, jwt_1.sendToken)(user, 201, res);
     }
     catch (error) {
-        return next(new ErrorHandler_1.default(error.message, 400));
+        return next(new ErrorHandler_1.default(`Account activation failed: ${error.message}`, 500));
     }
 }));
 // Unified login for both gamers and brands
@@ -188,17 +188,17 @@ exports.login = (0, catchAsyncError_1.CatchAsyncError)((req, res, next) => __awa
     try {
         const { email, password } = req.body;
         if (!email || !password)
-            return next(new ErrorHandler_1.default("Missing email or password", 400));
+            return next(new ErrorHandler_1.default("Please provide both email and password", 400));
         const user = yield user_model_1.default.findOne({ email }).select("+password");
         if (!user)
-            return next(new ErrorHandler_1.default("Invalid credentials", 403));
+            return next(new ErrorHandler_1.default("Invalid email or password. Please check your credentials and try again.", 401));
         const match = yield user.comparePassword(password);
         if (!match)
-            return next(new ErrorHandler_1.default("Invalid credentials", 403));
+            return next(new ErrorHandler_1.default("Invalid email or password. Please check your credentials and try again.", 401));
         (0, jwt_1.sendToken)(user, 200, res);
     }
     catch (error) {
-        return next(new ErrorHandler_1.default(error.message, 400));
+        return next(new ErrorHandler_1.default(`Login failed: ${error.message}`, 500));
     }
 }));
 // Brand registration (email/password)
@@ -206,11 +206,11 @@ exports.registerBrand = (0, catchAsyncError_1.CatchAsyncError)((req, res, next) 
     try {
         const { name, email, password, companyName } = req.body;
         if (!email || !password || !companyName) {
-            return next(new ErrorHandler_1.default("Missing required fields", 400));
+            return next(new ErrorHandler_1.default("Missing required fields: email, password, and companyName are required", 400));
         }
         const existing = yield user_model_1.default.findOne({ email });
         if (existing)
-            return next(new ErrorHandler_1.default("Email already exists", 400));
+            return next(new ErrorHandler_1.default("This email is already registered. Please use a different email or try logging in.", 409));
         // Create activation token BEFORE creating user
         const activationToken = (0, user_controller_1.createActivationToken)({
             name,
@@ -258,7 +258,7 @@ exports.registerBrand = (0, catchAsyncError_1.CatchAsyncError)((req, res, next) 
         }
     }
     catch (error) {
-        return next(new ErrorHandler_1.default(error.message, 400));
+        return next(new ErrorHandler_1.default(`Brand registration failed: ${error.message}`, 500));
     }
 }));
 exports.logout = (0, catchAsyncError_1.CatchAsyncError)((req, res) => __awaiter(void 0, void 0, void 0, function* () {
@@ -316,7 +316,7 @@ exports.activateBrand = (0, catchAsyncError_1.CatchAsyncError)((req, res, next) 
         (0, jwt_1.sendToken)(user, 201, res);
     }
     catch (error) {
-        return next(new ErrorHandler_1.default(error.message, 400));
+        return next(new ErrorHandler_1.default(`Brand activation failed: ${error.message}`, 500));
     }
 }));
 // Resend activation email for gamer
@@ -360,7 +360,7 @@ exports.resendGamerActivation = (0, catchAsyncError_1.CatchAsyncError)((req, res
         });
     }
     catch (error) {
-        return next(new ErrorHandler_1.default(error.message, 400));
+        return next(new ErrorHandler_1.default(`Failed to resend activation email: ${error.message}`, 500));
     }
 }));
 // Resend activation email for brand
@@ -404,6 +404,6 @@ exports.resendBrandActivation = (0, catchAsyncError_1.CatchAsyncError)((req, res
         });
     }
     catch (error) {
-        return next(new ErrorHandler_1.default(error.message, 400));
+        return next(new ErrorHandler_1.default(`Failed to resend activation email: ${error.message}`, 500));
     }
 }));

@@ -60,7 +60,7 @@ exports.getActiveCampaigns = (0, catchAsyncError_1.CatchAsyncError)((req, res, n
         res.status(200).json({ success: true, campaigns: campaignsWithBrand });
     }
     catch (error) {
-        return next(new ErrorHandler_1.default(error.message, 400));
+        return next(new ErrorHandler_1.default(`Failed to fetch active campaigns: ${error.message}`, 500));
     }
 }));
 // Get all campaigns (with brand name included)
@@ -109,7 +109,7 @@ exports.getAllCampaigns = (0, catchAsyncError_1.CatchAsyncError)((req, res, next
         res.status(200).json({ success: true, campaigns: campaignsWithBrand });
     }
     catch (error) {
-        return next(new ErrorHandler_1.default(error.message, 400));
+        return next(new ErrorHandler_1.default(`Failed to fetch campaigns: ${error.message}`, 500));
     }
 }));
 // Get campaigns by brandId
@@ -152,7 +152,7 @@ exports.getCampaignsByBrand = (0, catchAsyncError_1.CatchAsyncError)((req, res, 
         res.status(200).json({ success: true, campaigns: campaignsWithBrand });
     }
     catch (error) {
-        return next(new ErrorHandler_1.default(error.message, 400));
+        return next(new ErrorHandler_1.default(`Failed to fetch campaigns for brand: ${error.message}`, 500));
     }
 }));
 // Get single campaign by campaignId (with brand name)
@@ -197,7 +197,7 @@ exports.getCampaignById = (0, catchAsyncError_1.CatchAsyncError)((req, res, next
         });
     }
     catch (error) {
-        return next(new ErrorHandler_1.default(error.message, 400));
+        return next(new ErrorHandler_1.default(`Failed to fetch campaign details: ${error.message}`, 500));
     }
 }));
 // Check if current user has completed a campaign
@@ -222,7 +222,7 @@ exports.checkCampaignCompletion = (0, catchAsyncError_1.CatchAsyncError)((req, r
         });
     }
     catch (error) {
-        return next(new ErrorHandler_1.default(error.message, 400));
+        return next(new ErrorHandler_1.default(`Failed to check campaign completion status: ${error.message}`, 500));
     }
 }));
 exports.submitCampaign = (0, catchAsyncError_1.CatchAsyncError)((req, res, next) => __awaiter(void 0, void 0, void 0, function* () {
@@ -233,7 +233,7 @@ exports.submitCampaign = (0, catchAsyncError_1.CatchAsyncError)((req, res, next)
         const body = req.body;
         const campaign = yield puzzleCampaign_model_1.default.findById(campaignId);
         if (!campaign) {
-            return next(new ErrorHandler_1.default("Campaign not found", 404));
+            return next(new ErrorHandler_1.default("Campaign not found. Please check the campaign ID and try again.", 404));
         }
         // compute quiz score
         let quizScore = 0;
@@ -357,6 +357,6 @@ exports.submitCampaign = (0, catchAsyncError_1.CatchAsyncError)((req, res, next)
         });
     }
     catch (error) {
-        return next(new ErrorHandler_1.default(error.message, 400));
+        return next(new ErrorHandler_1.default(`Failed to submit campaign result: ${error.message}`, 500));
     }
 }));

@@ -23,6 +23,14 @@ export interface IPuzzleCampaign extends Document {
   startDate: Date;
   endDate: Date;
   analytics: any;
+  // Payment/Budget tracking
+  packageType?: "basic" | "premium";
+  totalBudget?: number; // Total amount paid for campaign
+  dailyAllocation?: number; // Fixed daily rate (₦1,000 or ₦1,428.57)
+  budgetUsed?: number; // Amount already allocated to daily pools
+  budgetRemaining?: number; // Amount left to allocate
+  paymentStatus?: "unpaid" | "paid" | "partial";
+  transactionId?: string; // Reference to Transaction
 }
 
 const puzzleCampaignSchema: Schema<IPuzzleCampaign> = new mongoose.Schema(
@@ -59,6 +67,14 @@ const puzzleCampaignSchema: Schema<IPuzzleCampaign> = new mongoose.Schema(
     startDate: { type: Date, required: true },
     endDate: { type: Date, required: true },
     analytics: { type: Schema.Types.Mixed, default: {} },
+    // Payment/Budget tracking
+    packageType: { type: String, enum: ["basic", "premium"] },
+    totalBudget: { type: Number, default: 0 },
+    dailyAllocation: { type: Number, default: 0 },
+    budgetUsed: { type: Number, default: 0 },
+    budgetRemaining: { type: Number, default: 0 },
+    paymentStatus: { type: String, enum: ["unpaid", "paid", "partial"], default: "unpaid" },
+    transactionId: { type: String },
   },
   { timestamps: true }
 );

@@ -170,17 +170,17 @@ export const loginUser = CatchAsyncError(
       const user = await userModel.findOne({ email }).select("+password");
 
       if (!user) {
-        return next(new ErrorHandler("Invalid email or password", 403));
+        return next(new ErrorHandler("Invalid email or password. Please check your credentials and try again.", 401));
       }
 
       //check password
       const isPasswordMatch = await user.comparePassword?.(password);
       if (!isPasswordMatch) {
-        return next(new ErrorHandler("Invalid email or password", 403));
+        return next(new ErrorHandler("Invalid email or password. Please check your credentials and try again.", 401));
       }
       sendToken(user, 200, res);
     } catch (error: any) {
-      return next(new ErrorHandler(error.message, 403));
+      return next(new ErrorHandler(`Login failed: ${error.message}`, 500));
     }
   }
 );

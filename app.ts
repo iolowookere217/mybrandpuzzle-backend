@@ -8,6 +8,8 @@ import brandRouter from "./routes/brand.route";
 import leaderboardRouter from "./routes/leaderboard.route";
 import userRouter from "./routes/user.route";
 import packageRouter from "./routes/package.route";
+import paymentRouter from "./routes/payment.route";
+import { ErrorMiddleware } from "./middlewares/error";
 
 const app = express();
 
@@ -32,7 +34,8 @@ app.use(
   brandRouter,
   leaderboardRouter,
   userRouter,
-  packageRouter
+  packageRouter,
+  paymentRouter
 );
 
 //testing api
@@ -96,5 +99,8 @@ app.all("*", (req: Request, res: Response, next: NextFunction) => {
   err.statusCode = 404;
   next(err);
 });
+
+// Global error handler - must be last
+app.use(ErrorMiddleware);
 
 export { app };
