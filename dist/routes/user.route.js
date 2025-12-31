@@ -23,4 +23,6 @@ userRouter.get("/profile/brand", auth_1.isAuthenticated, user_controller_1.getBr
 userRouter.put("/profile/gamer", auth_1.isAuthenticated, user_controller_1.updateGamerProfile);
 // Update brand profile
 userRouter.put("/profile/brand", auth_1.isAuthenticated, user_controller_1.updateBrandProfile);
+// Clear all gamer data (Admin only)
+userRouter.post("/admin/clear-all-data", auth_1.isAuthenticated, (0, auth_1.authorizeRoles)("admin"), user_controller_1.clearAllGamerData);
 exports.default = userRouter;

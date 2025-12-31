@@ -185,6 +185,8 @@ exports.createCampaign = (0, catchAsyncError_1.CatchAsyncError)((req, res, next)
         const endDate = new Date();
         endDate.setHours(endDate.getHours() + parsedTimeLimit); // Add timeLimit hours to current time
         // Prepare campaign data
+        // Allow brand to save as draft or create as active (will need payment later)
+        const initialStatus = req.body.saveAsDraft === true ? "draft" : "active";
         const campaignData = {
             brandId: brandUser._id,
             packageId: packageId,
@@ -197,7 +199,8 @@ exports.createCampaign = (0, catchAsyncError_1.CatchAsyncError)((req, res, next)
             originalImageUrl: originalUrl,
             questions: parsedQuestions,
             timeLimit: parsedTimeLimit,
-            status: "active",
+            status: initialStatus,
+            paymentStatus: "unpaid", // All new campaigns start as unpaid
             startDate,
             endDate,
         };

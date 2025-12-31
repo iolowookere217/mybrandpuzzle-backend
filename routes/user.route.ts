@@ -10,9 +10,10 @@ import {
   getBrandProfile,
   updateGamerProfile,
   updateBrandProfile,
-  getAllGamers
+  getAllGamers,
+  clearAllGamerData
 } from "../controllers/user.controller";
-import { isAuthenticated } from "../utils/auth";
+import { isAuthenticated, authorizeRoles } from "../utils/auth";
 
 const userRouter = express.Router();
 
@@ -43,5 +44,7 @@ userRouter.put("/profile/gamer", isAuthenticated, updateGamerProfile);
 // Update brand profile
 userRouter.put("/profile/brand", isAuthenticated, updateBrandProfile);
 
+// Clear all gamer data (Admin only)
+userRouter.post("/admin/clear-all-data", isAuthenticated, authorizeRoles("admin"), clearAllGamerData);
 
 export default userRouter;

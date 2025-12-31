@@ -12,12 +12,13 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.getAllGamers = exports.updateBrandProfile = exports.updateGamerProfile = exports.getBrandProfile = exports.getGamerProfile = exports.getUserInfo = exports.updateAccessToken = exports.logoutUser = exports.loginUser = exports.activateUser = exports.createActivationToken = exports.registerUser = void 0;
+exports.clearAllGamerData = exports.getAllGamers = exports.updateBrandProfile = exports.updateGamerProfile = exports.getBrandProfile = exports.getGamerProfile = exports.getUserInfo = exports.updateAccessToken = exports.logoutUser = exports.loginUser = exports.activateUser = exports.createActivationToken = exports.registerUser = void 0;
 const user_model_1 = __importDefault(require("../models/user.model"));
 const ErrorHandler_1 = __importDefault(require("../utils/ErrorHandler"));
 const catchAsyncError_1 = require("../middlewares/catchAsyncError");
 const jsonwebtoken_1 = __importDefault(require("jsonwebtoken"));
 const puzzleAttempt_model_1 = __importDefault(require("../models/puzzleAttempt.model"));
+const leaderboard_model_1 = __importDefault(require("../models/leaderboard.model"));
 const ejs_1 = __importDefault(require("ejs"));
 const path_1 = __importDefault(require("path"));
 const sendEmail_1 = __importDefault(require("../utils/sendEmail"));
@@ -199,7 +200,7 @@ exports.getUserInfo = (0, catchAsyncError_1.CatchAsyncError)((req, res, next) =>
 }));
 // Get gamer profile with full analytics
 exports.getGamerProfile = (0, catchAsyncError_1.CatchAsyncError)((req, res, next) => __awaiter(void 0, void 0, void 0, function* () {
-    var _a;
+    var _a, _b, _c, _d, _e, _f, _g, _h, _j, _k, _l, _m, _o, _p, _q;
     try {
         const userId = (_a = req.user) === null || _a === void 0 ? void 0 : _a._id;
         if (!req.user || req.user.role !== "gamer") {
@@ -214,10 +215,12 @@ exports.getGamerProfile = (0, catchAsyncError_1.CatchAsyncError)((req, res, next
         const dayOfWeek = now.getDay();
         const daysFromMonday = dayOfWeek === 0 ? 6 : dayOfWeek - 1;
         const weekStart = new Date(now.getFullYear(), now.getMonth(), now.getDate() - daysFromMonday);
+        weekStart.setHours(0, 0, 0, 0);
         const weekEnd = new Date(weekStart);
         weekEnd.setDate(weekEnd.getDate() + 6);
-        // Get current week's leaderboard
-        const agg = yield puzzleAttempt_model_1.default.aggregate([
+        weekEnd.setHours(23, 59, 59, 999);
+        // Get current week's leaderboard for position
+        const weeklyLeaderboard = yield puzzleAttempt_model_1.default.aggregate([
             {
                 $match: {
                     firstTimeSolved: true,
@@ -233,12 +236,67 @@ exports.getGamerProfile = (0, catchAsyncError_1.CatchAsyncError)((req, res, next
             },
             { $sort: { puzzlesSolved: -1, points: -1 } },
         ]);
-        // Find user's position
-        let leaderboardPosition = null;
-        const userIndex = agg.findIndex((entry) => entry._id.toString() === userId.toString());
-        if (userIndex !== -1) {
-            leaderboardPosition = userIndex + 1;
+        // Find user's weekly leaderboard position
+        let weeklyLeaderboardPosition = null;
+        const weeklyUserIndex = weeklyLeaderboard.findIndex((entry) => entry._id.toString() === userId.toString());
+        if (weeklyUserIndex !== -1) {
+            weeklyLeaderboardPosition = weeklyUserIndex + 1;
         }
+        // Get all-time leaderboard for position
+        const allTimeLeaderboard = yield puzzleAttempt_model_1.default.aggregate([
+            {
+                $match: {
+                    firstTimeSolved: true,
+                },
+            },
+            {
+                $group: {
+                    _id: "$userId",
+                    puzzlesSolved: { $sum: 1 },
+                    points: { $sum: "$pointsEarned" },
+                },
+            },
+            { $sort: { points: -1, puzzlesSolved: -1 } },
+        ]);
+        // Find user's all-time leaderboard position
+        let allTimeLeaderboardPosition = null;
+        const allTimeUserIndex = allTimeLeaderboard.findIndex((entry) => entry._id.toString() === userId.toString());
+        if (allTimeUserIndex !== -1) {
+            allTimeLeaderboardPosition = allTimeUserIndex + 1;
+        }
+        // Calculate weekly analytics from puzzle attempts
+        const weeklyAttempts = yield puzzleAttempt_model_1.default.find({
+            userId: userId,
+            timestamp: { $gte: weekStart, $lte: weekEnd },
+        }).lean();
+        const weeklyStats = weeklyAttempts.reduce((acc, attempt) => {
+            if (attempt.firstTimeSolved) {
+                acc.puzzlesSolved += 1;
+            }
+            acc.totalPoints += attempt.pointsEarned || 0;
+            acc.totalTime += attempt.timeTaken || 0;
+            acc.totalMoves += attempt.movesTaken || 0;
+            acc.attempts += 1;
+            if (attempt.solved) {
+                acc.successfulAttempts += 1;
+            }
+            return acc;
+        }, {
+            puzzlesSolved: 0,
+            totalPoints: 0,
+            totalEarnings: 0,
+            totalTime: 0,
+            totalMoves: 0,
+            attempts: 0,
+            successfulAttempts: 0,
+            successRate: 0,
+        });
+        // Calculate success rate
+        weeklyStats.successRate =
+            weeklyStats.attempts > 0
+                ? weeklyStats.successfulAttempts / weeklyStats.attempts
+                : 0;
+        weeklyStats.totalEarnings = weeklyStats.totalPoints; // Points = Earnings
         res.status(200).json({
             success: true,
             profile: {
@@ -250,16 +308,38 @@ exports.getGamerProfile = (0, catchAsyncError_1.CatchAsyncError)((req, res, next
                 avatar: user.avatar,
                 role: user.role,
                 isVerified: user.isVerified,
-                analytics: user.analytics,
+                analytics: {
+                    lifetime: {
+                        puzzlesSolved: ((_c = (_b = user.analytics) === null || _b === void 0 ? void 0 : _b.lifetime) === null || _c === void 0 ? void 0 : _c.puzzlesSolved) || 0,
+                        totalPoints: ((_e = (_d = user.analytics) === null || _d === void 0 ? void 0 : _d.lifetime) === null || _e === void 0 ? void 0 : _e.totalPoints) || 0,
+                        totalEarnings: ((_g = (_f = user.analytics) === null || _f === void 0 ? void 0 : _f.lifetime) === null || _g === void 0 ? void 0 : _g.totalEarnings) || 0,
+                        totalTime: ((_j = (_h = user.analytics) === null || _h === void 0 ? void 0 : _h.lifetime) === null || _j === void 0 ? void 0 : _j.totalTime) || 0,
+                        totalMoves: ((_l = (_k = user.analytics) === null || _k === void 0 ? void 0 : _k.lifetime) === null || _l === void 0 ? void 0 : _l.totalMoves) || 0,
+                        attempts: ((_o = (_m = user.analytics) === null || _m === void 0 ? void 0 : _m.lifetime) === null || _o === void 0 ? void 0 : _o.attempts) || 0,
+                        successRate: ((_q = (_p = user.analytics) === null || _p === void 0 ? void 0 : _p.lifetime) === null || _q === void 0 ? void 0 : _q.successRate) || 0,
+                        leaderboardPosition: allTimeLeaderboardPosition,
+                    },
+                    weekly: {
+                        weekStart: weekStart.toISOString().slice(0, 10),
+                        weekEnd: weekEnd.toISOString().slice(0, 10),
+                        puzzlesSolved: weeklyStats.puzzlesSolved,
+                        totalPoints: weeklyStats.totalPoints,
+                        totalEarnings: weeklyStats.totalEarnings,
+                        totalTime: weeklyStats.totalTime,
+                        totalMoves: weeklyStats.totalMoves,
+                        attempts: weeklyStats.attempts,
+                        successRate: Math.round(weeklyStats.successRate * 100) / 100,
+                        leaderboardPosition: weeklyLeaderboardPosition,
+                    },
+                },
                 puzzlesSolved: user.puzzlesSolved,
-                leaderboardPosition, // Position on current week's leaderboard
                 createdAt: user.createdAt,
                 updatedAt: user.updatedAt,
             },
         });
     }
     catch (error) {
-        return next(new ErrorHandler_1.default(error.message, 400));
+        return next(new ErrorHandler_1.default(`Failed to fetch gamer profile: ${error.message}`, 500));
     }
 }));
 // Get brand profile with brand details and campaigns
@@ -456,5 +536,47 @@ exports.getAllGamers = (0, catchAsyncError_1.CatchAsyncError)((req, res, next) =
     }
     catch (error) {
         return next(new ErrorHandler_1.default(error.message, 400));
+    }
+}));
+// Clear all gamer data (Admin only)
+exports.clearAllGamerData = (0, catchAsyncError_1.CatchAsyncError)((req, res, next) => __awaiter(void 0, void 0, void 0, function* () {
+    try {
+        const { confirm } = req.body;
+        if (!confirm || confirm !== true) {
+            return next(new ErrorHandler_1.default("Please confirm this action by sending { confirm: true } in the request body", 400));
+        }
+        // Delete all puzzle attempts
+        const puzzleAttemptsDeleted = yield puzzleAttempt_model_1.default.deleteMany({});
+        // Reset all gamer analytics to zero
+        const usersUpdateResult = yield user_model_1.default.updateMany({ role: { $nin: ["brand", "admin"] } }, {
+            $set: {
+                "analytics.lifetime.puzzlesSolved": 0,
+                "analytics.lifetime.totalPoints": 0,
+                "analytics.lifetime.totalEarnings": 0,
+                "analytics.lifetime.totalTime": 0,
+                "analytics.lifetime.totalMoves": 0,
+                "analytics.lifetime.attempts": 0,
+                "analytics.lifetime.successRate": 0,
+                "analytics.daily": {
+                    date: new Date().toISOString().slice(0, 10),
+                    puzzlesSolved: 0,
+                },
+                puzzlesSolved: [],
+            },
+        });
+        // Clear all leaderboard records
+        const leaderboardsDeleted = yield leaderboard_model_1.default.deleteMany({});
+        res.status(200).json({
+            success: true,
+            message: "All gamer data cleared successfully",
+            summary: {
+                puzzleAttemptsDeleted: puzzleAttemptsDeleted.deletedCount,
+                usersReset: usersUpdateResult.modifiedCount,
+                leaderboardsCleared: leaderboardsDeleted.deletedCount,
+            },
+        });
+    }
+    catch (error) {
+        return next(new ErrorHandler_1.default(`Failed to clear gamer data: ${error.message}`, 500));
     }
 }));

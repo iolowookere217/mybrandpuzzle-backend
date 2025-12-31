@@ -81,8 +81,10 @@ const checkExpiredCampaigns = () => __awaiter(void 0, void 0, void 0, function* 
         }
         const now = new Date();
         // Find all active campaigns that have passed their end date
+        // Only auto-end campaigns that have been paid for
         const result = yield puzzleCampaign_model_1.default.updateMany({
             status: "active",
+            paymentStatus: "paid", // Only end paid campaigns
             endDate: { $lt: now },
         }, {
             $set: { status: "ended" },

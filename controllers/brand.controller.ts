@@ -231,6 +231,9 @@ export const createCampaign = CatchAsyncError(
       endDate.setHours(endDate.getHours() + parsedTimeLimit); // Add timeLimit hours to current time
 
       // Prepare campaign data
+      // Allow brand to save as draft or create as active (will need payment later)
+      const initialStatus = req.body.saveAsDraft === true ? "draft" : "active";
+
       const campaignData: any = {
         brandId: brandUser._id,
         packageId: packageId,
@@ -243,7 +246,8 @@ export const createCampaign = CatchAsyncError(
         originalImageUrl: originalUrl,
         questions: parsedQuestions,
         timeLimit: parsedTimeLimit,
-        status: "active",
+        status: initialStatus,
+        paymentStatus: "unpaid", // All new campaigns start as unpaid
         startDate,
         endDate,
       };

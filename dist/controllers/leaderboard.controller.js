@@ -12,7 +12,7 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.getLeaderboardByWeek = exports.getWeeklyLeaderboard = void 0;
+exports.getAllTimeLeaderboard = exports.getLeaderboardByWeek = exports.getWeeklyLeaderboard = void 0;
 const catchAsyncError_1 = require("../middlewares/catchAsyncError");
 const ErrorHandler_1 = __importDefault(require("../utils/ErrorHandler"));
 const puzzleAttempt_model_1 = __importDefault(require("../models/puzzleAttempt.model"));
@@ -26,8 +26,19 @@ exports.getWeeklyLeaderboard = (0, catchAsyncError_1.CatchAsyncError)((req, res,
         const dayOfWeek = now.getDay();
         const daysFromMonday = dayOfWeek === 0 ? 6 : dayOfWeek - 1; // Sunday is 0, Monday is 1
         const weekStart = new Date(now.getFullYear(), now.getMonth(), now.getDate() - daysFromMonday);
+        weekStart.setHours(0, 0, 0, 0);
         const weekEnd = new Date(weekStart);
         weekEnd.setDate(weekEnd.getDate() + 6); // Sunday
+        weekEnd.setHours(23, 59, 59, 999);
+        // DEBUG: Count all attempts regardless of week
+        const totalAttempts = yield puzzleAttempt_model_1.default.countDocuments({
+            firstTimeSolved: true,
+        });
+        // DEBUG: Count attempts in current week
+        const weekAttempts = yield puzzleAttempt_model_1.default.countDocuments({
+            firstTimeSolved: true,
+            timestamp: { $gte: weekStart, $lte: weekEnd },
+        });
         // count firstTimeSolved attempts that occurred this week grouped by user
         const agg = yield puzzleAttempt_model_1.default.aggregate([
             {
@@ -78,6 +89,13 @@ exports.getWeeklyLeaderboard = (0, catchAsyncError_1.CatchAsyncError)((req, res,
                 weekEnd: weekEnd.toISOString().slice(0, 10),
                 totalPlayers: entriesWithUserDetails.length,
                 entries: entriesWithUserDetails,
+            },
+            debug: {
+                totalAttemptsWithFirstTimeSolved: totalAttempts,
+                attemptsInCurrentWeek: weekAttempts,
+                weekStartFull: weekStart.toISOString(),
+                weekEndFull: weekEnd.toISOString(),
+                currentDate: now.toISOString(),
             },
         });
     }
@@ -131,5 +149,59 @@ exports.getLeaderboardByWeek = (0, catchAsyncError_1.CatchAsyncError)((req, res,
     }
     catch (error) {
         return next(new ErrorHandler_1.default(error.message, 400));
+    }
+}));
+// Get all-time leaderboard
+exports.getAllTimeLeaderboard = (0, catchAsyncError_1.CatchAsyncError)((req, res, next) => __awaiter(void 0, void 0, void 0, function* () {
+    try {
+        // Aggregate all puzzle attempts (no time filter)
+        const agg = yield puzzleAttempt_model_1.default.aggregate([
+            {
+                $match: {
+                    firstTimeSolved: true,
+                },
+            },
+            {
+                $group: {
+                    _id: "$userId",
+                    puzzlesSolved: { $sum: 1 },
+                    points: { $sum: "$pointsEarned" },
+                },
+            },
+            { $sort: { points: -1, puzzlesSolved: -1 } },
+            { $limit: 100 },
+        ]);
+        const entries = agg.map((a) => ({
+            userId: a._id,
+            puzzlesSolved: a.puzzlesSolved,
+            points: a.points,
+        }));
+        // Fetch user details for each entry
+        const entriesWithUserDetails = yield Promise.all(entries.map((entry, index) => __awaiter(void 0, void 0, void 0, function* () {
+            const user = yield user_model_1.default.findById(entry.userId)
+                .select("firstName lastName avatar username")
+                .lean();
+            return {
+                position: index + 1,
+                userId: entry.userId,
+                fullName: user ? `${user.firstName} ${user.lastName}` : "Unknown User",
+                username: (user === null || user === void 0 ? void 0 : user.username) || "",
+                avatar: (user === null || user === void 0 ? void 0 : user.avatar) || "",
+                puzzlesSolved: entry.puzzlesSolved,
+                points: entry.points,
+                amountEarned: entry.points, // Points = amount earned
+            };
+        })));
+        res.status(200).json({
+            success: true,
+            leaderboard: {
+                type: "all-time",
+                totalPlayers: entriesWithUserDetails.length,
+                entries: entriesWithUserDetails,
+            },
+        });
+    }
+    catch (error) {
+        return next(new ErrorHandler_1.default(`Failed to fetch all-time leaderboard: ${error.message}`, 500));
     }
 }));

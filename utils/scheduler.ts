@@ -85,9 +85,11 @@ export const checkExpiredCampaigns = async () => {
     const now = new Date();
 
     // Find all active campaigns that have passed their end date
+    // Only auto-end campaigns that have been paid for
     const result = await PuzzleCampaignModel.updateMany(
       {
         status: "active",
+        paymentStatus: "paid",  // Only end paid campaigns
         endDate: { $lt: now },
       },
       {

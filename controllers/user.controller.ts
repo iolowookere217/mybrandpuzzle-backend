@@ -4,6 +4,7 @@ import ErrorHandler from "../utils/ErrorHandler";
 import { CatchAsyncError } from "../middlewares/catchAsyncError";
 import jwt, { Secret, JwtPayload } from "jsonwebtoken";
 import PuzzleAttemptModel from "../models/puzzleAttempt.model";
+import LeaderboardModel from "../models/leaderboard.model";
 
 import ejs from "ejs";
 import path from "path";
@@ -310,11 +311,14 @@ export const getGamerProfile = CatchAsyncError(
         now.getMonth(),
         now.getDate() - daysFromMonday
       );
+      weekStart.setHours(0, 0, 0, 0);
+
       const weekEnd = new Date(weekStart);
       weekEnd.setDate(weekEnd.getDate() + 6);
+      weekEnd.setHours(23, 59, 59, 999);
 
-      // Get current week's leaderboard
-      const agg = await PuzzleAttemptModel.aggregate([
+      // Get current week's leaderboard for position
+      const weeklyLeaderboard = await PuzzleAttemptModel.aggregate([
         {
           $match: {
             firstTimeSolved: true,
@@ -331,12 +335,79 @@ export const getGamerProfile = CatchAsyncError(
         { $sort: { puzzlesSolved: -1, points: -1 } },
       ]);
 
-      // Find user's position
-      let leaderboardPosition = null;
-      const userIndex = agg.findIndex((entry: any) => entry._id.toString() === userId.toString());
-      if (userIndex !== -1) {
-        leaderboardPosition = userIndex + 1;
+      // Find user's weekly leaderboard position
+      let weeklyLeaderboardPosition = null;
+      const weeklyUserIndex = weeklyLeaderboard.findIndex(
+        (entry: any) => entry._id.toString() === userId.toString()
+      );
+      if (weeklyUserIndex !== -1) {
+        weeklyLeaderboardPosition = weeklyUserIndex + 1;
       }
+
+      // Get all-time leaderboard for position
+      const allTimeLeaderboard = await PuzzleAttemptModel.aggregate([
+        {
+          $match: {
+            firstTimeSolved: true,
+          },
+        },
+        {
+          $group: {
+            _id: "$userId",
+            puzzlesSolved: { $sum: 1 },
+            points: { $sum: "$pointsEarned" },
+          },
+        },
+        { $sort: { points: -1, puzzlesSolved: -1 } },
+      ]);
+
+      // Find user's all-time leaderboard position
+      let allTimeLeaderboardPosition = null;
+      const allTimeUserIndex = allTimeLeaderboard.findIndex(
+        (entry: any) => entry._id.toString() === userId.toString()
+      );
+      if (allTimeUserIndex !== -1) {
+        allTimeLeaderboardPosition = allTimeUserIndex + 1;
+      }
+
+      // Calculate weekly analytics from puzzle attempts
+      const weeklyAttempts = await PuzzleAttemptModel.find({
+        userId: userId,
+        timestamp: { $gte: weekStart, $lte: weekEnd },
+      }).lean();
+
+      const weeklyStats = weeklyAttempts.reduce(
+        (acc, attempt) => {
+          if (attempt.firstTimeSolved) {
+            acc.puzzlesSolved += 1;
+          }
+          acc.totalPoints += attempt.pointsEarned || 0;
+          acc.totalTime += attempt.timeTaken || 0;
+          acc.totalMoves += attempt.movesTaken || 0;
+          acc.attempts += 1;
+          if (attempt.solved) {
+            acc.successfulAttempts += 1;
+          }
+          return acc;
+        },
+        {
+          puzzlesSolved: 0,
+          totalPoints: 0,
+          totalEarnings: 0,
+          totalTime: 0,
+          totalMoves: 0,
+          attempts: 0,
+          successfulAttempts: 0,
+          successRate: 0,
+        }
+      );
+
+      // Calculate success rate
+      weeklyStats.successRate =
+        weeklyStats.attempts > 0
+          ? weeklyStats.successfulAttempts / weeklyStats.attempts
+          : 0;
+      weeklyStats.totalEarnings = weeklyStats.totalPoints; // Points = Earnings
 
       res.status(200).json({
         success: true,
@@ -349,15 +420,37 @@ export const getGamerProfile = CatchAsyncError(
           avatar: user.avatar,
           role: user.role,
           isVerified: user.isVerified,
-          analytics: user.analytics,
+          analytics: {
+            lifetime: {
+              puzzlesSolved: user.analytics?.lifetime?.puzzlesSolved || 0,
+              totalPoints: user.analytics?.lifetime?.totalPoints || 0,
+              totalEarnings: user.analytics?.lifetime?.totalEarnings || 0,
+              totalTime: user.analytics?.lifetime?.totalTime || 0,
+              totalMoves: user.analytics?.lifetime?.totalMoves || 0,
+              attempts: user.analytics?.lifetime?.attempts || 0,
+              successRate: user.analytics?.lifetime?.successRate || 0,
+              leaderboardPosition: allTimeLeaderboardPosition,
+            },
+            weekly: {
+              weekStart: weekStart.toISOString().slice(0, 10),
+              weekEnd: weekEnd.toISOString().slice(0, 10),
+              puzzlesSolved: weeklyStats.puzzlesSolved,
+              totalPoints: weeklyStats.totalPoints,
+              totalEarnings: weeklyStats.totalEarnings,
+              totalTime: weeklyStats.totalTime,
+              totalMoves: weeklyStats.totalMoves,
+              attempts: weeklyStats.attempts,
+              successRate: Math.round(weeklyStats.successRate * 100) / 100,
+              leaderboardPosition: weeklyLeaderboardPosition,
+            },
+          },
           puzzlesSolved: user.puzzlesSolved,
-          leaderboardPosition, // Position on current week's leaderboard
           createdAt: (user as any).createdAt,
           updatedAt: (user as any).updatedAt,
         },
       });
     } catch (error: any) {
-      return next(new ErrorHandler(error.message, 400));
+      return next(new ErrorHandler(`Failed to fetch gamer profile: ${error.message}`, 500));
     }
   }
 );
@@ -582,6 +675,65 @@ export const getAllGamers = CatchAsyncError(
       res.status(200).json({ success: true, gamers });
     } catch (error: any) {
       return next(new ErrorHandler(error.message, 400));
+    }
+  }
+);
+
+// Clear all gamer data (Admin only)
+export const clearAllGamerData = CatchAsyncError(
+  async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const { confirm } = req.body;
+
+      if (!confirm || confirm !== true) {
+        return next(
+          new ErrorHandler(
+            "Please confirm this action by sending { confirm: true } in the request body",
+            400
+          )
+        );
+      }
+
+      // Delete all puzzle attempts
+      const puzzleAttemptsDeleted = await PuzzleAttemptModel.deleteMany({});
+
+      // Reset all gamer analytics to zero
+      const usersUpdateResult = await userModel.updateMany(
+        { role: { $nin: ["brand", "admin"] } },
+        {
+          $set: {
+            "analytics.lifetime.puzzlesSolved": 0,
+            "analytics.lifetime.totalPoints": 0,
+            "analytics.lifetime.totalEarnings": 0,
+            "analytics.lifetime.totalTime": 0,
+            "analytics.lifetime.totalMoves": 0,
+            "analytics.lifetime.attempts": 0,
+            "analytics.lifetime.successRate": 0,
+            "analytics.daily": {
+              date: new Date().toISOString().slice(0, 10),
+              puzzlesSolved: 0,
+            },
+            puzzlesSolved: [],
+          },
+        }
+      );
+
+      // Clear all leaderboard records
+      const leaderboardsDeleted = await LeaderboardModel.deleteMany({});
+
+      res.status(200).json({
+        success: true,
+        message: "All gamer data cleared successfully",
+        summary: {
+          puzzleAttemptsDeleted: puzzleAttemptsDeleted.deletedCount,
+          usersReset: usersUpdateResult.modifiedCount,
+          leaderboardsCleared: leaderboardsDeleted.deletedCount,
+        },
+      });
+    } catch (error: any) {
+      return next(
+        new ErrorHandler(`Failed to clear gamer data: ${error.message}`, 500)
+      );
     }
   }
 );

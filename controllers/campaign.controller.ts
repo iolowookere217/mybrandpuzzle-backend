@@ -44,6 +44,7 @@ export const getActiveCampaigns = CatchAsyncError(
             questions: campaign.questions,
             words: campaign.words,
             status: campaign.status,
+            paymentStatus: (campaign as any).paymentStatus || "unpaid",
             startDate: campaign.startDate,
             endDate: campaign.endDate,
             createdAt: (campaign as any).createdAt,
@@ -62,7 +63,7 @@ export const getActiveCampaigns = CatchAsyncError(
 export const getAllCampaigns = CatchAsyncError(
   async (req: Request, res: Response, next: NextFunction) => {
     try {
-      const { gameType, status } = req.query;
+      const { gameType, status, paymentStatus } = req.query;
 
       // Build filter
       const filter: any = {};
@@ -77,8 +78,14 @@ export const getAllCampaigns = CatchAsyncError(
         filter.status = status;
       }
 
+      // Filter by paymentStatus if provided
+      const validPaymentStatuses = ["unpaid", "paid", "partial"];
+      if (paymentStatus && validPaymentStatuses.includes(paymentStatus as string)) {
+        filter.paymentStatus = paymentStatus;
+      }
+
       const campaigns = await PuzzleCampaignModel.find(filter)
-        .select("_id brandId packageId gameType title description brandUrl campaignUrl puzzleImageUrl timeLimit questions words status startDate endDate createdAt")
+        .select("_id brandId packageId gameType title description brandUrl campaignUrl puzzleImageUrl timeLimit questions words status paymentStatus startDate endDate createdAt")
         .lean();
 
       // Fetch brand names and package names for all campaigns
@@ -102,6 +109,7 @@ export const getAllCampaigns = CatchAsyncError(
             questions: campaign.questions,
             words: campaign.words,
             status: campaign.status,
+            paymentStatus: (campaign as any).paymentStatus || "unpaid",
             startDate: campaign.startDate,
             endDate: campaign.endDate,
             createdAt: (campaign as any).createdAt,
@@ -154,6 +162,7 @@ export const getCampaignsByBrand = CatchAsyncError(
             questions: campaign.questions,
             words: campaign.words,
             status: campaign.status,
+            paymentStatus: (campaign as any).paymentStatus || "unpaid",
             startDate: campaign.startDate,
             endDate: campaign.endDate,
             createdAt: (campaign as any).createdAt,

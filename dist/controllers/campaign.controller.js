@@ -52,6 +52,7 @@ exports.getActiveCampaigns = (0, catchAsyncError_1.CatchAsyncError)((req, res, n
                 questions: campaign.questions,
                 words: campaign.words,
                 status: campaign.status,
+                paymentStatus: campaign.paymentStatus || "unpaid",
                 startDate: campaign.startDate,
                 endDate: campaign.endDate,
                 createdAt: campaign.createdAt,
@@ -66,7 +67,7 @@ exports.getActiveCampaigns = (0, catchAsyncError_1.CatchAsyncError)((req, res, n
 // Get all campaigns (with brand name included)
 exports.getAllCampaigns = (0, catchAsyncError_1.CatchAsyncError)((req, res, next) => __awaiter(void 0, void 0, void 0, function* () {
     try {
-        const { gameType, status } = req.query;
+        const { gameType, status, paymentStatus } = req.query;
         // Build filter
         const filter = {};
         const validGameTypes = ["sliding_puzzle", "card_matching", "whack_a_mole", "word_hunt"];
@@ -78,8 +79,13 @@ exports.getAllCampaigns = (0, catchAsyncError_1.CatchAsyncError)((req, res, next
         if (status && validStatuses.includes(status)) {
             filter.status = status;
         }
+        // Filter by paymentStatus if provided
+        const validPaymentStatuses = ["unpaid", "paid", "partial"];
+        if (paymentStatus && validPaymentStatuses.includes(paymentStatus)) {
+            filter.paymentStatus = paymentStatus;
+        }
         const campaigns = yield puzzleCampaign_model_1.default.find(filter)
-            .select("_id brandId packageId gameType title description brandUrl campaignUrl puzzleImageUrl timeLimit questions words status startDate endDate createdAt")
+            .select("_id brandId packageId gameType title description brandUrl campaignUrl puzzleImageUrl timeLimit questions words status paymentStatus startDate endDate createdAt")
             .lean();
         // Fetch brand names and package names for all campaigns
         const campaignsWithBrand = yield Promise.all(campaigns.map((campaign) => __awaiter(void 0, void 0, void 0, function* () {
@@ -101,6 +107,7 @@ exports.getAllCampaigns = (0, catchAsyncError_1.CatchAsyncError)((req, res, next
                 questions: campaign.questions,
                 words: campaign.words,
                 status: campaign.status,
+                paymentStatus: campaign.paymentStatus || "unpaid",
                 startDate: campaign.startDate,
                 endDate: campaign.endDate,
                 createdAt: campaign.createdAt,
@@ -144,6 +151,7 @@ exports.getCampaignsByBrand = (0, catchAsyncError_1.CatchAsyncError)((req, res, 
                 questions: campaign.questions,
                 words: campaign.words,
                 status: campaign.status,
+                paymentStatus: campaign.paymentStatus || "unpaid",
                 startDate: campaign.startDate,
                 endDate: campaign.endDate,
                 createdAt: campaign.createdAt,
