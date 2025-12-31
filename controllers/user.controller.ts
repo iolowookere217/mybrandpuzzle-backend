@@ -5,6 +5,7 @@ import { CatchAsyncError } from "../middlewares/catchAsyncError";
 import jwt, { Secret, JwtPayload } from "jsonwebtoken";
 import PuzzleAttemptModel from "../models/puzzleAttempt.model";
 import LeaderboardModel from "../models/leaderboard.model";
+import { bucket } from "../firebaseConfig";
 
 import ejs from "ejs";
 import path from "path";
@@ -529,27 +530,25 @@ export const updateGamerProfile = CatchAsyncError(
       if (lastName !== undefined && typeof lastName === "string") {
         updateData.lastName = lastName.trim();
       }
-      if (avatar && typeof avatar === "string") {
-        // Reject base64 encoded images - only accept URLs
-        if (avatar.startsWith("data:image/") || avatar.startsWith("data:application/")) {
-          return next(
-            new ErrorHandler(
-              "Base64 encoded images are not supported. Please upload the image file or provide a valid image URL.",
-              400
-            )
-          );
-        }
 
-        // Validate it's a URL
-        if (!avatar.startsWith("http://") && !avatar.startsWith("https://")) {
-          return next(
-            new ErrorHandler(
-              "Avatar must be a valid URL (starting with http:// or https://)",
-              400
-            )
-          );
-        }
+      // Handle avatar upload (file or URL)
+      const uploadedFile: any = (req as any).file;
 
+      if (uploadedFile) {
+        // File was uploaded - upload to Firebase Storage
+        const now = Date.now();
+        const avatarName = `avatars/${userId}-${now}-${uploadedFile.originalname}`;
+
+        const fileRef = bucket.file(avatarName);
+        await fileRef.save(uploadedFile.buffer, {
+          resumable: false,
+          contentType: uploadedFile.mimetype,
+        });
+        await fileRef.makePublic();
+
+        updateData.avatar = `https://storage.googleapis.com/${bucket.name}/${avatarName}`;
+      } else if (avatar && typeof avatar === "string") {
+        // URL was provided as string
         updateData.avatar = avatar;
       }
 
@@ -612,31 +611,29 @@ export const updateBrandProfile = CatchAsyncError(
       if (name && typeof name === "string" && name.trim() !== "") {
         userUpdateData.name = name.trim();
       }
-      if (avatar && typeof avatar === "string") {
-        // Reject base64 encoded images - only accept URLs
-        if (avatar.startsWith("data:image/") || avatar.startsWith("data:application/")) {
-          return next(
-            new ErrorHandler(
-              "Base64 encoded images are not supported. Please upload the image file or provide a valid image URL.",
-              400
-            )
-          );
-        }
-
-        // Validate it's a URL
-        if (!avatar.startsWith("http://") && !avatar.startsWith("https://")) {
-          return next(
-            new ErrorHandler(
-              "Avatar must be a valid URL (starting with http:// or https://)",
-              400
-            )
-          );
-        }
-
-        userUpdateData.avatar = avatar;
-      }
       if (companyName && typeof companyName === "string" && companyName.trim() !== "") {
         userUpdateData.companyName = companyName.trim();
+      }
+
+      // Handle avatar upload (file or URL)
+      const uploadedFile: any = (req as any).file;
+
+      if (uploadedFile) {
+        // File was uploaded - upload to Firebase Storage
+        const now = Date.now();
+        const avatarName = `avatars/${userId}-${now}-${uploadedFile.originalname}`;
+
+        const fileRef = bucket.file(avatarName);
+        await fileRef.save(uploadedFile.buffer, {
+          resumable: false,
+          contentType: uploadedFile.mimetype,
+        });
+        await fileRef.makePublic();
+
+        userUpdateData.avatar = `https://storage.googleapis.com/${bucket.name}/${avatarName}`;
+      } else if (avatar && typeof avatar === "string") {
+        // URL was provided as string
+        userUpdateData.avatar = avatar;
       }
 
       // Check if there's anything to update

@@ -39,27 +39,6 @@ export const googleAuth = CatchAsyncError(
           uid: decoded.uid,
         };
       } else if (email && googleId) {
-        // Validate avatar if provided - reject base64 images
-        if (avatar) {
-          if (avatar.startsWith("data:image/") || avatar.startsWith("data:application/")) {
-            return next(
-              new ErrorHandler(
-                "Base64 encoded images are not supported. Please provide a valid image URL instead.",
-                400
-              )
-            );
-          }
-
-          if (!avatar.startsWith("http://") && !avatar.startsWith("https://")) {
-            return next(
-              new ErrorHandler(
-                "Avatar must be a valid URL (starting with http:// or https://)",
-                400
-              )
-            );
-          }
-        }
-
         profile = { email, name, picture: avatar, uid: googleId };
       } else {
         return next(new ErrorHandler("Invalid Google payload", 400));
