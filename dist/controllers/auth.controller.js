@@ -44,6 +44,15 @@ exports.googleAuth = (0, catchAsyncError_1.CatchAsyncError)((req, res, next) => 
             };
         }
         else if (email && googleId) {
+            // Validate avatar if provided - reject base64 images
+            if (avatar) {
+                if (avatar.startsWith("data:image/") || avatar.startsWith("data:application/")) {
+                    return next(new ErrorHandler_1.default("Base64 encoded images are not supported. Please provide a valid image URL instead.", 400));
+                }
+                if (!avatar.startsWith("http://") && !avatar.startsWith("https://")) {
+                    return next(new ErrorHandler_1.default("Avatar must be a valid URL (starting with http:// or https://)", 400));
+                }
+            }
             profile = { email, name, picture: avatar, uid: googleId };
         }
         else {

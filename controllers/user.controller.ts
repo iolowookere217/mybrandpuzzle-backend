@@ -530,6 +530,26 @@ export const updateGamerProfile = CatchAsyncError(
         updateData.lastName = lastName.trim();
       }
       if (avatar && typeof avatar === "string") {
+        // Reject base64 encoded images - only accept URLs
+        if (avatar.startsWith("data:image/") || avatar.startsWith("data:application/")) {
+          return next(
+            new ErrorHandler(
+              "Base64 encoded images are not supported. Please upload the image file or provide a valid image URL.",
+              400
+            )
+          );
+        }
+
+        // Validate it's a URL
+        if (!avatar.startsWith("http://") && !avatar.startsWith("https://")) {
+          return next(
+            new ErrorHandler(
+              "Avatar must be a valid URL (starting with http:// or https://)",
+              400
+            )
+          );
+        }
+
         updateData.avatar = avatar;
       }
 
@@ -593,6 +613,26 @@ export const updateBrandProfile = CatchAsyncError(
         userUpdateData.name = name.trim();
       }
       if (avatar && typeof avatar === "string") {
+        // Reject base64 encoded images - only accept URLs
+        if (avatar.startsWith("data:image/") || avatar.startsWith("data:application/")) {
+          return next(
+            new ErrorHandler(
+              "Base64 encoded images are not supported. Please upload the image file or provide a valid image URL.",
+              400
+            )
+          );
+        }
+
+        // Validate it's a URL
+        if (!avatar.startsWith("http://") && !avatar.startsWith("https://")) {
+          return next(
+            new ErrorHandler(
+              "Avatar must be a valid URL (starting with http:// or https://)",
+              400
+            )
+          );
+        }
+
         userUpdateData.avatar = avatar;
       }
       if (companyName && typeof companyName === "string" && companyName.trim() !== "") {
