@@ -21,6 +21,13 @@ const crypto_1 = __importDefault(require("crypto"));
 const axios_1 = __importDefault(require("axios"));
 const PAYSTACK_SECRET_KEY = process.env.PAYSTACK_SECRET_KEY || "";
 const PAYSTACK_BASE_URL = "https://api.paystack.co";
+// Log Paystack configuration on startup (only show first 8 characters for security)
+if (!PAYSTACK_SECRET_KEY) {
+    console.error("⚠️  PAYSTACK_SECRET_KEY is not configured in .env file!");
+}
+else {
+    console.log("✅ Paystack configured:", PAYSTACK_SECRET_KEY.substring(0, 8) + "...");
+}
 // Package pricing
 const PACKAGE_PRICES = {
     basic: 7000, // ₦7,000
