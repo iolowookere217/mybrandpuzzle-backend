@@ -52,7 +52,7 @@ export const getWeeklyLeaderboard = CatchAsyncError(
             points: { $sum: "$pointsEarned" },
           },
         },
-        { $sort: { puzzlesSolved: -1, points: -1 } },
+        { $sort: { points: -1, puzzlesSolved: -1 } },
         { $limit: 100 },
       ]);
 
@@ -76,13 +76,14 @@ export const getWeeklyLeaderboard = CatchAsyncError(
       const entriesWithUserDetails = await Promise.all(
         entries.map(async (entry: any, index: number) => {
           const user = await UserModel.findById(entry.userId)
-            .select("firstName lastName avatar")
+            .select("firstName lastName username avatar")
             .lean();
 
           return {
             position: index + 1,
             userId: entry.userId,
             fullName: user ? `${user.firstName} ${user.lastName}` : "Unknown User",
+            username: user?.username || "",
             avatar: user?.avatar || "",
             puzzlesSolved: entry.puzzlesSolved,
             points: entry.points,
@@ -141,13 +142,14 @@ export const getLeaderboardByWeek = CatchAsyncError(
       const entriesWithUserDetails = await Promise.all(
         board.entries.map(async (entry: any, index: number) => {
           const user = await UserModel.findById(entry.userId)
-            .select("firstName lastName avatar")
+            .select("firstName lastName username avatar")
             .lean();
 
           return {
             position: index + 1,
             userId: entry.userId,
             fullName: user ? `${user.firstName} ${user.lastName}` : "Unknown User",
+            username: user?.username || "",
             avatar: user?.avatar || "",
             puzzlesSolved: entry.puzzlesSolved,
             points: entry.points,

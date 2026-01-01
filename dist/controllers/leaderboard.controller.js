@@ -54,7 +54,7 @@ exports.getWeeklyLeaderboard = (0, catchAsyncError_1.CatchAsyncError)((req, res,
                     points: { $sum: "$pointsEarned" },
                 },
             },
-            { $sort: { puzzlesSolved: -1, points: -1 } },
+            { $sort: { points: -1, puzzlesSolved: -1 } },
             { $limit: 100 },
         ]);
         const entries = agg.map((a) => ({
@@ -69,12 +69,13 @@ exports.getWeeklyLeaderboard = (0, catchAsyncError_1.CatchAsyncError)((req, res,
         // Fetch user details for each entry
         const entriesWithUserDetails = yield Promise.all(entries.map((entry, index) => __awaiter(void 0, void 0, void 0, function* () {
             const user = yield user_model_1.default.findById(entry.userId)
-                .select("firstName lastName avatar")
+                .select("firstName lastName username avatar")
                 .lean();
             return {
                 position: index + 1,
                 userId: entry.userId,
                 fullName: user ? `${user.firstName} ${user.lastName}` : "Unknown User",
+                username: (user === null || user === void 0 ? void 0 : user.username) || "",
                 avatar: (user === null || user === void 0 ? void 0 : user.avatar) || "",
                 puzzlesSolved: entry.puzzlesSolved,
                 points: entry.points,
@@ -125,12 +126,13 @@ exports.getLeaderboardByWeek = (0, catchAsyncError_1.CatchAsyncError)((req, res,
         // Fetch user details for each entry
         const entriesWithUserDetails = yield Promise.all(board.entries.map((entry, index) => __awaiter(void 0, void 0, void 0, function* () {
             const user = yield user_model_1.default.findById(entry.userId)
-                .select("firstName lastName avatar")
+                .select("firstName lastName username avatar")
                 .lean();
             return {
                 position: index + 1,
                 userId: entry.userId,
                 fullName: user ? `${user.firstName} ${user.lastName}` : "Unknown User",
+                username: (user === null || user === void 0 ? void 0 : user.username) || "",
                 avatar: (user === null || user === void 0 ? void 0 : user.avatar) || "",
                 puzzlesSolved: entry.puzzlesSolved,
                 points: entry.points,

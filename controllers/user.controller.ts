@@ -520,7 +520,7 @@ export const updateGamerProfile = CatchAsyncError(
         return next(new ErrorHandler("Access denied. Gamer profile only.", 403));
       }
 
-      const { firstName, lastName, avatar } = req.body;
+      const { firstName, lastName, username, avatar } = req.body;
 
       // Build update object with only provided fields
       const updateData: any = {};
@@ -529,6 +529,23 @@ export const updateGamerProfile = CatchAsyncError(
       }
       if (lastName !== undefined && typeof lastName === "string") {
         updateData.lastName = lastName.trim();
+      }
+
+      // Handle username update with uniqueness check
+      if (username && typeof username === "string" && username.trim() !== "") {
+        const trimmedUsername = username.trim();
+
+        // Check if username is already taken by another user
+        const existingUser = await userModel.findOne({
+          username: trimmedUsername,
+          _id: { $ne: userId } // Exclude current user
+        });
+
+        if (existingUser) {
+          return next(new ErrorHandler("Username is already taken. Please choose a different username.", 400));
+        }
+
+        updateData.username = trimmedUsername;
       }
 
       // Handle avatar upload (file or URL)

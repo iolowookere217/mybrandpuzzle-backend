@@ -398,7 +398,7 @@ exports.updateGamerProfile = (0, catchAsyncError_1.CatchAsyncError)((req, res, n
         if (!req.user || req.user.role !== "gamer") {
             return next(new ErrorHandler_1.default("Access denied. Gamer profile only.", 403));
         }
-        const { firstName, lastName, avatar } = req.body;
+        const { firstName, lastName, username, avatar } = req.body;
         // Build update object with only provided fields
         const updateData = {};
         if (firstName && typeof firstName === "string" && firstName.trim() !== "") {
@@ -406,6 +406,19 @@ exports.updateGamerProfile = (0, catchAsyncError_1.CatchAsyncError)((req, res, n
         }
         if (lastName !== undefined && typeof lastName === "string") {
             updateData.lastName = lastName.trim();
+        }
+        // Handle username update with uniqueness check
+        if (username && typeof username === "string" && username.trim() !== "") {
+            const trimmedUsername = username.trim();
+            // Check if username is already taken by another user
+            const existingUser = yield user_model_1.default.findOne({
+                username: trimmedUsername,
+                _id: { $ne: userId } // Exclude current user
+            });
+            if (existingUser) {
+                return next(new ErrorHandler_1.default("Username is already taken. Please choose a different username.", 400));
+            }
+            updateData.username = trimmedUsername;
         }
         // Handle avatar upload (file or URL)
         const uploadedFile = req.file;
