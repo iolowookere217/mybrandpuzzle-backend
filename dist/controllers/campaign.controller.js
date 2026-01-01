@@ -365,6 +365,12 @@ exports.submitCampaign = (0, catchAsyncError_1.CatchAsyncError)((req, res, next)
             }
             yield userDoc.save();
         }
+        // Remove user from "currently playing" after submitting
+        if (userId) {
+            const redis = require("../utils/redis").redis;
+            yield redis.srem("users:currently_playing", userId);
+            yield redis.del(`user:${userId}:playing`);
+        }
         res.status(201).json({
             success: true,
             attempt,

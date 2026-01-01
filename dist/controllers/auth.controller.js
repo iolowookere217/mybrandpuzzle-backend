@@ -75,6 +75,11 @@ exports.googleAuth = (0, catchAsyncError_1.CatchAsyncError)((req, res, next) => 
                 yield user.save();
             }
         }
+        // Mark user as online after successful Google login
+        const redis = require("../utils/redis").redis;
+        yield redis.sadd("users:online", String(user._id));
+        yield redis.expire("users:online", 300); // 5 minutes expiry
+        yield redis.set(`user:${user._id}:last_active`, Date.now(), "EX", 300);
         (0, jwt_1.sendToken)(user, 200, res);
     }
     catch (error) {
@@ -195,6 +200,11 @@ exports.login = (0, catchAsyncError_1.CatchAsyncError)((req, res, next) => __awa
         const match = yield user.comparePassword(password);
         if (!match)
             return next(new ErrorHandler_1.default("Invalid email or password. Please check your credentials and try again.", 401));
+        // Mark user as online after successful login
+        const redis = require("../utils/redis").redis;
+        yield redis.sadd("users:online", String(user._id));
+        yield redis.expire("users:online", 300); // 5 minutes expiry
+        yield redis.set(`user:${user._id}:last_active`, Date.now(), "EX", 300);
         (0, jwt_1.sendToken)(user, 200, res);
     }
     catch (error) {
@@ -262,6 +272,16 @@ exports.registerBrand = (0, catchAsyncError_1.CatchAsyncError)((req, res, next) 
     }
 }));
 exports.logout = (0, catchAsyncError_1.CatchAsyncError)((req, res) => __awaiter(void 0, void 0, void 0, function* () {
+    var _a;
+    // Mark user as offline
+    const userId = (_a = req.user) === null || _a === void 0 ? void 0 : _a._id;
+    if (userId) {
+        const redis = require("../utils/redis").redis;
+        yield redis.srem("users:online", String(userId));
+        yield redis.srem("users:currently_playing", String(userId));
+        yield redis.del(`user:${userId}:last_active`);
+        yield redis.del(`user:${userId}:playing`);
+    }
     res.cookie("access_token", "", { maxAge: 1 });
     res.cookie("refresh_token", "", { maxAge: 1 });
     res.status(200).json({ success: true });

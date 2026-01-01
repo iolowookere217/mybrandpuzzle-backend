@@ -72,6 +72,12 @@ export const googleAuth = CatchAsyncError(
         }
       }
 
+      // Mark user as online after successful Google login
+      const redis = require("../utils/redis").redis;
+      await redis.sadd("users:online", String(user._id));
+      await redis.expire("users:online", 300); // 5 minutes expiry
+      await redis.set(`user:${user._id}:last_active`, Date.now(), "EX", 300);
+
       sendToken(user, 200, res);
     } catch (error: any) {
       return next(new ErrorHandler(`Google authentication failed: ${error.message}`, 500));
@@ -232,6 +238,12 @@ export const login = CatchAsyncError(
       const match = await user.comparePassword!(password);
       if (!match) return next(new ErrorHandler("Invalid email or password. Please check your credentials and try again.", 401));
 
+      // Mark user as online after successful login
+      const redis = require("../utils/redis").redis;
+      await redis.sadd("users:online", String(user._id));
+      await redis.expire("users:online", 300); // 5 minutes expiry
+      await redis.set(`user:${user._id}:last_active`, Date.now(), "EX", 300);
+
       sendToken(user, 200, res);
     } catch (error: any) {
       return next(new ErrorHandler(`Login failed: ${error.message}`, 500));
@@ -314,6 +326,16 @@ export const registerBrand = CatchAsyncError(
 );
 
 export const logout = CatchAsyncError(async (req: Request, res: Response) => {
+  // Mark user as offline
+  const userId = (req as any).user?._id;
+  if (userId) {
+    const redis = require("../utils/redis").redis;
+    await redis.srem("users:online", String(userId));
+    await redis.srem("users:currently_playing", String(userId));
+    await redis.del(`user:${userId}:last_active`);
+    await redis.del(`user:${userId}:playing`);
+  }
+
   res.cookie("access_token", "", { maxAge: 1 });
   res.cookie("refresh_token", "", { maxAge: 1 });
   res.status(200).json({ success: true });

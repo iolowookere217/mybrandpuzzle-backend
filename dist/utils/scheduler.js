@@ -62,8 +62,8 @@ const startScheduler = () => {
                 yield leaderboard_model_1.default.findOneAndUpdate({ type: "weekly", date: weekKey }, { type: "weekly", date: weekKey, entries }, { upsert: true });
                 console.log(`Created weekly leaderboard for week: ${weekKey}`);
             }
-            // Check and update expired campaigns
-            yield (0, exports.checkExpiredCampaigns)();
+            // Frontend handles campaign expiry filtering - no need to check here
+            // await checkExpiredCampaigns();
         }
         catch (err) {
             // eslint-disable-next-line no-console

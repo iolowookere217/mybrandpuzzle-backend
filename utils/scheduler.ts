@@ -65,8 +65,8 @@ export const startScheduler = () => {
         console.log(`Created weekly leaderboard for week: ${weekKey}`);
       }
 
-      // Check and update expired campaigns
-      await checkExpiredCampaigns();
+      // Frontend handles campaign expiry filtering - no need to check here
+      // await checkExpiredCampaigns();
     } catch (err) {
       // eslint-disable-next-line no-console
       console.error("Scheduler error:", err);

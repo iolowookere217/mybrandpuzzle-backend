@@ -9,6 +9,7 @@ import leaderboardRouter from "./routes/leaderboard.route";
 import userRouter from "./routes/user.route";
 import packageRouter from "./routes/package.route";
 import paymentRouter from "./routes/payment.route";
+import analyticsRouter from "./routes/analytics.route";
 import { ErrorMiddleware } from "./middlewares/error";
 
 const app = express();
@@ -35,7 +36,8 @@ app.use(
   leaderboardRouter,
   userRouter,
   packageRouter,
-  paymentRouter
+  paymentRouter,
+  analyticsRouter
 );
 
 //testing api
