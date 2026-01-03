@@ -108,6 +108,7 @@ exports.initializePayment = (0, catchAsyncError_1.CatchAsyncError)((req, res, ne
 exports.verifyPayment = (0, catchAsyncError_1.CatchAsyncError)((req, res, next) => __awaiter(void 0, void 0, void 0, function* () {
     try {
         const { reference } = req.params;
+        const user = req.user;
         if (!reference) {
             return next(new ErrorHandler_1.default("Payment reference is required", 400));
         }
@@ -115,6 +116,18 @@ exports.verifyPayment = (0, catchAsyncError_1.CatchAsyncError)((req, res, next) 
         const transaction = yield transaction_model_1.default.findOne({ reference });
         if (!transaction) {
             return next(new ErrorHandler_1.default("Transaction not found", 404));
+        }
+        // Validate that the transaction belongs to the requesting brand
+        if (String(transaction.brandId) !== String(user._id)) {
+            return next(new ErrorHandler_1.default("You are not authorized to verify this payment reference", 403));
+        }
+        // Validate that the transaction belongs to the campaign
+        const campaign = yield puzzleCampaign_model_1.default.findById(transaction.campaignId);
+        if (!campaign) {
+            return next(new ErrorHandler_1.default("Campaign not found", 404));
+        }
+        if (String(campaign.brandId) !== String(user._id)) {
+            return next(new ErrorHandler_1.default("This payment reference does not belong to your campaign", 403));
         }
         // Verify with Paystack
         const paystackResponse = yield axios_1.default.get(`${PAYSTACK_BASE_URL}/transaction/verify/${reference}`, {
@@ -129,10 +142,12 @@ exports.verifyPayment = (0, catchAsyncError_1.CatchAsyncError)((req, res, next) 
             transaction.status = "success";
             transaction.paystackResponse = paymentData;
             yield transaction.save();
-            // Update campaign with payment details
-            const campaign = yield puzzleCampaign_model_1.default.findById(transaction.campaignId);
+            // Update campaign with payment details and activate it
             if (campaign) {
                 const packageType = transaction.packageType;
+                const now = new Date();
+                const timeLimitInHours = campaign.timeLimit;
+                const endDate = new Date(now.getTime() + timeLimitInHours * 60 * 60 * 1000);
                 campaign.packageType = packageType;
                 campaign.totalBudget = transaction.amount;
                 campaign.dailyAllocation = DAILY_RATES[packageType];
@@ -140,6 +155,9 @@ exports.verifyPayment = (0, catchAsyncError_1.CatchAsyncError)((req, res, next) 
                 campaign.budgetUsed = 0;
                 campaign.paymentStatus = "paid";
                 campaign.transactionId = String(transaction._id);
+                campaign.status = "active";
+                campaign.startDate = now;
+                campaign.endDate = endDate;
                 yield campaign.save();
             }
             res.status(200).json({
@@ -187,10 +205,13 @@ exports.paystackWebhook = (0, catchAsyncError_1.CatchAsyncError)((req, res, next
                 transaction.status = "success";
                 transaction.paystackResponse = event.data;
                 yield transaction.save();
-                // Update campaign
+                // Update campaign and activate it
                 const campaign = yield puzzleCampaign_model_1.default.findById(metadata.campaignId);
                 if (campaign) {
                     const packageType = transaction.packageType;
+                    const now = new Date();
+                    const timeLimitInHours = campaign.timeLimit;
+                    const endDate = new Date(now.getTime() + timeLimitInHours * 60 * 60 * 1000);
                     campaign.packageType = packageType;
                     campaign.totalBudget = transaction.amount;
                     campaign.dailyAllocation = DAILY_RATES[packageType];
@@ -198,6 +219,9 @@ exports.paystackWebhook = (0, catchAsyncError_1.CatchAsyncError)((req, res, next
                     campaign.budgetUsed = 0;
                     campaign.paymentStatus = "paid";
                     campaign.transactionId = String(transaction._id);
+                    campaign.status = "active";
+                    campaign.startDate = now;
+                    campaign.endDate = endDate;
                     yield campaign.save();
                 }
             }

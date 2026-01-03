@@ -19,9 +19,22 @@ const puzzleCampaign_model_1 = __importDefault(require("../models/puzzleCampaign
 const puzzleAttempt_model_1 = __importDefault(require("../models/puzzleAttempt.model"));
 const user_model_1 = __importDefault(require("../models/user.model"));
 const package_model_1 = __importDefault(require("../models/package.model"));
+// Helper function to check and update expired campaigns
+const updateExpiredCampaigns = () => __awaiter(void 0, void 0, void 0, function* () {
+    const now = new Date();
+    yield puzzleCampaign_model_1.default.updateMany({
+        status: "active",
+        paymentStatus: "paid",
+        endDate: { $lt: now },
+    }, {
+        $set: { status: "ended" },
+    });
+});
 // Get active campaigns only (with brand name included)
 exports.getActiveCampaigns = (0, catchAsyncError_1.CatchAsyncError)((req, res, next) => __awaiter(void 0, void 0, void 0, function* () {
     try {
+        // Update expired campaigns before fetching
+        yield updateExpiredCampaigns();
         const { gameType } = req.query;
         // Build filter for active campaigns only
         const filter = { status: "active" };
@@ -30,7 +43,7 @@ exports.getActiveCampaigns = (0, catchAsyncError_1.CatchAsyncError)((req, res, n
             filter.gameType = gameType;
         }
         const campaigns = yield puzzleCampaign_model_1.default.find(filter)
-            .select("_id brandId packageId gameType title description brandUrl campaignUrl puzzleImageUrl timeLimit questions words status startDate endDate createdAt")
+            .select("_id brandId packageId gameType title description brandUrl campaignUrl puzzleImageUrl timeLimit questions words status paymentStatus startDate endDate createdAt")
             .lean();
         // Fetch brand names and package names for all campaigns
         const campaignsWithBrand = yield Promise.all(campaigns.map((campaign) => __awaiter(void 0, void 0, void 0, function* () {
@@ -67,6 +80,8 @@ exports.getActiveCampaigns = (0, catchAsyncError_1.CatchAsyncError)((req, res, n
 // Get all campaigns (with brand name included)
 exports.getAllCampaigns = (0, catchAsyncError_1.CatchAsyncError)((req, res, next) => __awaiter(void 0, void 0, void 0, function* () {
     try {
+        // Update expired campaigns before fetching
+        yield updateExpiredCampaigns();
         const { gameType, status, paymentStatus } = req.query;
         // Build filter
         const filter = {};
@@ -122,9 +137,11 @@ exports.getAllCampaigns = (0, catchAsyncError_1.CatchAsyncError)((req, res, next
 // Get campaigns by brandId
 exports.getCampaignsByBrand = (0, catchAsyncError_1.CatchAsyncError)((req, res, next) => __awaiter(void 0, void 0, void 0, function* () {
     try {
+        // Update expired campaigns before fetching
+        yield updateExpiredCampaigns();
         const { brandId } = req.params;
         const campaigns = yield puzzleCampaign_model_1.default.find({ brandId })
-            .select("_id brandId packageId gameType title description brandUrl campaignUrl puzzleImageUrl timeLimit questions words status startDate endDate createdAt")
+            .select("_id brandId packageId gameType title description brandUrl campaignUrl puzzleImageUrl timeLimit questions words status paymentStatus startDate endDate createdAt")
             .lean();
         if (!campaigns || campaigns.length === 0) {
             return res.status(200).json({ success: true, campaigns: [] });
@@ -166,6 +183,8 @@ exports.getCampaignsByBrand = (0, catchAsyncError_1.CatchAsyncError)((req, res, 
 // Get single campaign by campaignId (with brand name)
 exports.getCampaignById = (0, catchAsyncError_1.CatchAsyncError)((req, res, next) => __awaiter(void 0, void 0, void 0, function* () {
     try {
+        // Update expired campaigns before fetching
+        yield updateExpiredCampaigns();
         const { campaignId } = req.params;
         const campaign = yield puzzleCampaign_model_1.default.findById(campaignId).lean();
         if (!campaign) {

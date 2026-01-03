@@ -24,7 +24,7 @@ const router = express.Router();
 
 // Payment endpoints
 router.post("/payments/initialize", isAuthenticated, authorizeRoles("brand"), initializePayment);
-router.get("/payments/verify/:reference", isAuthenticated, verifyPayment);
+router.get("/payments/verify/:reference", isAuthenticated, authorizeRoles("brand"), verifyPayment);
 router.post("/payments/webhook", paystackWebhook); // Paystack webhook (no auth)
 router.get("/payments/transactions", isAuthenticated, authorizeRoles("brand"), getTransactionHistory);
 

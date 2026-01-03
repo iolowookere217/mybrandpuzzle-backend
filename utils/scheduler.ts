@@ -7,8 +7,10 @@ import PuzzleCampaignModel from "../models/puzzleCampaign.model";
 // Weekly leaderboard scheduler
 export const startScheduler = () => {
   // Run once per day at midnight to check if we need to finalize the weekly leaderboard
-  const checkInterval = 24 * 60 * 60 * 1000; // 24 hours
+  const dailyCheckInterval = 24 * 60 * 60 * 1000; // 24 hours
+  const hourlyCheckInterval = 60 * 60 * 1000; // 1 hour
 
+  // Daily scheduler for weekly leaderboard
   setInterval(async () => {
     try {
       // Skip if database is not connected
@@ -64,14 +66,24 @@ export const startScheduler = () => {
 
         console.log(`Created weekly leaderboard for week: ${weekKey}`);
       }
-
-      // Frontend handles campaign expiry filtering - no need to check here
-      // await checkExpiredCampaigns();
     } catch (err) {
       // eslint-disable-next-line no-console
       console.error("Scheduler error:", err);
     }
-  }, checkInterval);
+  }, dailyCheckInterval);
+
+  // Hourly scheduler for checking expired campaigns
+  setInterval(async () => {
+    try {
+      await checkExpiredCampaigns();
+    } catch (err) {
+      // eslint-disable-next-line no-console
+      console.error("Campaign expiry check error:", err);
+    }
+  }, hourlyCheckInterval);
+
+  // Run expired campaign check immediately on startup
+  checkExpiredCampaigns();
 };
 
 // Check and mark expired campaigns as ended

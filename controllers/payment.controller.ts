@@ -126,6 +126,7 @@ export const verifyPayment = CatchAsyncError(
   async (req: Request, res: Response, next: NextFunction) => {
     try {
       const { reference } = req.params;
+      const user = req.user as any;
 
       if (!reference) {
         return next(new ErrorHandler("Payment reference is required", 400));
@@ -135,6 +136,31 @@ export const verifyPayment = CatchAsyncError(
       const transaction = await TransactionModel.findOne({ reference });
       if (!transaction) {
         return next(new ErrorHandler("Transaction not found", 404));
+      }
+
+      // Validate that the transaction belongs to the requesting brand
+      if (String(transaction.brandId) !== String(user._id)) {
+        return next(
+          new ErrorHandler(
+            "You are not authorized to verify this payment reference",
+            403
+          )
+        );
+      }
+
+      // Validate that the transaction belongs to the campaign
+      const campaign = await PuzzleCampaignModel.findById(transaction.campaignId);
+      if (!campaign) {
+        return next(new ErrorHandler("Campaign not found", 404));
+      }
+
+      if (String(campaign.brandId) !== String(user._id)) {
+        return next(
+          new ErrorHandler(
+            "This payment reference does not belong to your campaign",
+            403
+          )
+        );
       }
 
       // Verify with Paystack
@@ -156,10 +182,13 @@ export const verifyPayment = CatchAsyncError(
         transaction.paystackResponse = paymentData;
         await transaction.save();
 
-        // Update campaign with payment details
-        const campaign = await PuzzleCampaignModel.findById(transaction.campaignId);
+        // Update campaign with payment details and activate it
         if (campaign) {
           const packageType = transaction.packageType as "basic" | "premium";
+          const now = new Date();
+          const timeLimitInHours = campaign.timeLimit;
+          const endDate = new Date(now.getTime() + timeLimitInHours * 60 * 60 * 1000);
+
           campaign.packageType = packageType;
           campaign.totalBudget = transaction.amount;
           campaign.dailyAllocation = DAILY_RATES[packageType];
@@ -167,6 +196,9 @@ export const verifyPayment = CatchAsyncError(
           campaign.budgetUsed = 0;
           campaign.paymentStatus = "paid";
           campaign.transactionId = String(transaction._id);
+          campaign.status = "active";
+          campaign.startDate = now;
+          campaign.endDate = endDate;
           await campaign.save();
         }
 
@@ -224,10 +256,14 @@ export const paystackWebhook = CatchAsyncError(
           transaction.paystackResponse = event.data;
           await transaction.save();
 
-          // Update campaign
+          // Update campaign and activate it
           const campaign = await PuzzleCampaignModel.findById(metadata.campaignId);
           if (campaign) {
             const packageType = transaction.packageType as "basic" | "premium";
+            const now = new Date();
+            const timeLimitInHours = campaign.timeLimit;
+            const endDate = new Date(now.getTime() + timeLimitInHours * 60 * 60 * 1000);
+
             campaign.packageType = packageType;
             campaign.totalBudget = transaction.amount;
             campaign.dailyAllocation = DAILY_RATES[packageType];
@@ -235,6 +271,9 @@ export const paystackWebhook = CatchAsyncError(
             campaign.budgetUsed = 0;
             campaign.paymentStatus = "paid";
             campaign.transactionId = String(transaction._id);
+            campaign.status = "active";
+            campaign.startDate = now;
+            campaign.endDate = endDate;
             await campaign.save();
           }
         }

@@ -180,13 +180,11 @@ exports.createCampaign = (0, catchAsyncError_1.CatchAsyncError)((req, res, next)
         if (!timeLimit || isNaN(parsedTimeLimit) || parsedTimeLimit <= 0) {
             return next(new ErrorHandler_1.default("timeLimit is required and must be a positive number (in hours)", 400));
         }
-        // Calculate campaign start and end dates based on timeLimit (in hours)
-        const startDate = new Date();
-        const endDate = new Date();
-        endDate.setHours(endDate.getHours() + parsedTimeLimit); // Add timeLimit hours to current time
+        // Set placeholder dates - actual dates will be set when payment is made
+        const currentDate = new Date();
+        const placeholderEndDate = new Date(currentDate.getTime() + parsedTimeLimit * 60 * 60 * 1000);
         // Prepare campaign data
-        // Allow brand to save as draft or create as active (will need payment later)
-        const initialStatus = req.body.saveAsDraft === true ? "draft" : "active";
+        // All new campaigns start as draft until payment is verified
         const campaignData = {
             brandId: brandUser._id,
             packageId: packageId,
@@ -199,10 +197,10 @@ exports.createCampaign = (0, catchAsyncError_1.CatchAsyncError)((req, res, next)
             originalImageUrl: originalUrl,
             questions: parsedQuestions,
             timeLimit: parsedTimeLimit,
-            status: initialStatus,
+            status: "draft", // Always start as draft
             paymentStatus: "unpaid", // All new campaigns start as unpaid
-            startDate,
-            endDate,
+            startDate: currentDate, // Placeholder - will be updated on payment
+            endDate: placeholderEndDate, // Placeholder - will be updated on payment
         };
         // For word_hunt games, add words array
         if (campaignGameType === "word_hunt" && parsedWords.length > 0) {

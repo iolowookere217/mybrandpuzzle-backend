@@ -10,7 +10,7 @@ const auth_1 = require("../utils/auth");
 const router = express_1.default.Router();
 // Payment endpoints
 router.post("/payments/initialize", auth_1.isAuthenticated, (0, auth_1.authorizeRoles)("brand"), payment_controller_1.initializePayment);
-router.get("/payments/verify/:reference", auth_1.isAuthenticated, payment_controller_1.verifyPayment);
+router.get("/payments/verify/:reference", auth_1.isAuthenticated, (0, auth_1.authorizeRoles)("brand"), payment_controller_1.verifyPayment);
 router.post("/payments/webhook", payment_controller_1.paystackWebhook); // Paystack webhook (no auth)
 router.get("/payments/transactions", auth_1.isAuthenticated, (0, auth_1.authorizeRoles)("brand"), payment_controller_1.getTransactionHistory);
 // Campaign budget

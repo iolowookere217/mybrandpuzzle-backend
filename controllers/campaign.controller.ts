@@ -6,10 +6,28 @@ import PuzzleAttemptModel from "../models/puzzleAttempt.model";
 import UserModel from "../models/user.model";
 import PackageModel from "../models/package.model";
 
+// Helper function to check and update expired campaigns
+const updateExpiredCampaigns = async () => {
+  const now = new Date();
+  await PuzzleCampaignModel.updateMany(
+    {
+      status: "active",
+      paymentStatus: "paid",
+      endDate: { $lt: now },
+    },
+    {
+      $set: { status: "ended" },
+    }
+  );
+};
+
 // Get active campaigns only (with brand name included)
 export const getActiveCampaigns = CatchAsyncError(
   async (req: Request, res: Response, next: NextFunction) => {
     try {
+      // Update expired campaigns before fetching
+      await updateExpiredCampaigns();
+
       const { gameType } = req.query;
 
       // Build filter for active campaigns only
@@ -20,7 +38,7 @@ export const getActiveCampaigns = CatchAsyncError(
       }
 
       const campaigns = await PuzzleCampaignModel.find(filter)
-        .select("_id brandId packageId gameType title description brandUrl campaignUrl puzzleImageUrl timeLimit questions words status startDate endDate createdAt")
+        .select("_id brandId packageId gameType title description brandUrl campaignUrl puzzleImageUrl timeLimit questions words status paymentStatus startDate endDate createdAt")
         .lean();
 
       // Fetch brand names and package names for all campaigns
@@ -63,6 +81,9 @@ export const getActiveCampaigns = CatchAsyncError(
 export const getAllCampaigns = CatchAsyncError(
   async (req: Request, res: Response, next: NextFunction) => {
     try {
+      // Update expired campaigns before fetching
+      await updateExpiredCampaigns();
+
       const { gameType, status, paymentStatus } = req.query;
 
       // Build filter
@@ -128,10 +149,13 @@ export const getAllCampaigns = CatchAsyncError(
 export const getCampaignsByBrand = CatchAsyncError(
   async (req: Request, res: Response, next: NextFunction) => {
     try {
+      // Update expired campaigns before fetching
+      await updateExpiredCampaigns();
+
       const { brandId } = req.params;
 
       const campaigns = await PuzzleCampaignModel.find({ brandId })
-        .select("_id brandId packageId gameType title description brandUrl campaignUrl puzzleImageUrl timeLimit questions words status startDate endDate createdAt")
+        .select("_id brandId packageId gameType title description brandUrl campaignUrl puzzleImageUrl timeLimit questions words status paymentStatus startDate endDate createdAt")
         .lean();
 
       if (!campaigns || campaigns.length === 0) {
@@ -181,6 +205,9 @@ export const getCampaignsByBrand = CatchAsyncError(
 export const getCampaignById = CatchAsyncError(
   async (req: Request, res: Response, next: NextFunction) => {
     try {
+      // Update expired campaigns before fetching
+      await updateExpiredCampaigns();
+
       const { campaignId } = req.params;
       const campaign = await PuzzleCampaignModel.findById(campaignId).lean();
 
