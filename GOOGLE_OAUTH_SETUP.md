@@ -105,11 +105,11 @@ After creation, you'll see a modal with:
 NEXT_PUBLIC_API_URL=http://localhost:5000/api
 
 # Google OAuth Configuration
-NEXT_PUBLIC_GOOGLE_CLIENT_ID=178257577138-u5h0nfomm8ft749jdr7112m3ito0rbsd.apps.googleusercontent.com
+NEXT_PUBLIC_GOOGLE_CLIENT_ID=your_google_client_id_here
 
 # Optional: Keep for reference
-# CLIENT_SECRET=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
-# CLIENT_ID=178257577138-u5h0nfomm8ft749jdr7112m3ito0rbsd.apps.googleusercontent.com
+# CLIENT_SECRET=GOCSPX-xxxxxxxxxxxxx (Never commit real secrets!)
+# CLIENT_ID=your_client_id_here
 ```
 
 **Important Notes:**
