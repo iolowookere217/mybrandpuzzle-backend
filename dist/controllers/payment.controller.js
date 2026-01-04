@@ -21,6 +21,7 @@ const crypto_1 = __importDefault(require("crypto"));
 const axios_1 = __importDefault(require("axios"));
 const PAYSTACK_SECRET_KEY = process.env.PAYSTACK_SECRET_KEY || "";
 const PAYSTACK_BASE_URL = "https://api.paystack.co";
+const FRONTEND_URL = process.env.FRONTEND_URL || "http://localhost:3000";
 // Log Paystack configuration on startup (only show first 8 characters for security)
 if (!PAYSTACK_SECRET_KEY) {
     console.error("⚠️  PAYSTACK_SECRET_KEY is not configured in .env file!");
@@ -28,6 +29,8 @@ if (!PAYSTACK_SECRET_KEY) {
 else {
     console.log("✅ Paystack configured:", PAYSTACK_SECRET_KEY.substring(0, 8) + "...");
 }
+// Log Frontend URL configuration
+console.log("✅ Frontend URL configured:", FRONTEND_URL);
 // Package pricing
 const PACKAGE_PRICES = {
     basic: 7000, // ₦7,000
@@ -78,6 +81,7 @@ exports.initializePayment = (0, catchAsyncError_1.CatchAsyncError)((req, res, ne
             amount: amount * 100, // Convert to kobo
             reference,
             currency: "NGN",
+            callback_url: `${FRONTEND_URL}/payment/verify?reference=${reference}`,
             metadata: {
                 campaignId,
                 brandId: user._id,
