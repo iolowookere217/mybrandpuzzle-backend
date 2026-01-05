@@ -21,14 +21,33 @@ const firebaseConfig_1 = require("../firebaseConfig");
 const puzzleAttempt_model_1 = __importDefault(require("../models/puzzleAttempt.model"));
 const user_model_1 = __importDefault(require("../models/user.model"));
 const package_model_1 = __importDefault(require("../models/package.model"));
+// Package pricing
+const PACKAGE_PRICES = {
+    basic: 7000, // ₦7,000
+    premium: 10000, // ₦10,000
+};
+// Calculate duration factor based on timeLimit (in hours)
+const calculateDurationFactor = (timeLimitHours) => {
+    if (timeLimitHours === 168)
+        return 1; // 1 week
+    if (timeLimitHours === 336)
+        return 1.8; // 2 weeks
+    if (timeLimitHours === 504)
+        return 2.7; // 3 weeks
+    if (timeLimitHours === 672)
+        return 3.6; // 4 weeks
+    // For other durations, interpolate or use closest match
+    // Default: 1 (weekly rate)
+    return 1;
+};
 // Create a puzzle campaign (brands only). Expects multipart upload with one file: "image" (used for both scrambled and original)
 exports.createCampaign = (0, catchAsyncError_1.CatchAsyncError)((req, res, next) => __awaiter(void 0, void 0, void 0, function* () {
-    var _a, _b, _c;
+    var _a, _b, _c, _d;
     try {
         const brandUser = req.user;
         if (brandUser.role !== "brand")
             return next(new ErrorHandler_1.default("Only brands can create campaigns", 403));
-        const { questions, title, description, gameType, words, packageId, brandUrl, campaignUrl, timeLimit } = req.body;
+        const { questions, title, description, gameType, words, packageId, brandUrl, campaignUrl, timeLimit, } = req.body;
         // Validate packageId
         if (!packageId || typeof packageId !== "string") {
             return next(new ErrorHandler_1.default("packageId is required and must be a valid string", 400));
@@ -51,10 +70,15 @@ exports.createCampaign = (0, catchAsyncError_1.CatchAsyncError)((req, res, next)
             return next(new ErrorHandler_1.default("description is required and must be a non-empty string", 400));
         }
         // Validate gameType field
-        const validGameTypes = ["sliding_puzzle", "card_matching", "whack_a_mole", "word_hunt"];
+        const validGameTypes = [
+            "sliding_puzzle",
+            "card_matching",
+            "whack_a_mole",
+            "word_hunt",
+        ];
         const campaignGameType = gameType || "sliding_puzzle";
         if (!validGameTypes.includes(campaignGameType)) {
-            return next(new ErrorHandler_1.default('gameType must be one of: sliding_puzzle, card_matching, whack_a_mole, word_hunt', 400));
+            return next(new ErrorHandler_1.default("gameType must be one of: sliding_puzzle, card_matching, whack_a_mole, word_hunt", 400));
         }
         // Parse words array if it's a string (from form-data)
         let parsedWords = [];
@@ -63,9 +87,12 @@ exports.createCampaign = (0, catchAsyncError_1.CatchAsyncError)((req, res, next)
                 try {
                     parsedWords = JSON.parse(words);
                 }
-                catch (_d) {
+                catch (_e) {
                     // If parsing fails, try splitting by comma
-                    parsedWords = words.split(",").map((w) => w.trim()).filter((w) => w.length > 0);
+                    parsedWords = words
+                        .split(",")
+                        .map((w) => w.trim())
+                        .filter((w) => w.length > 0);
                 }
             }
             else if (Array.isArray(words)) {
@@ -180,6 +207,11 @@ exports.createCampaign = (0, catchAsyncError_1.CatchAsyncError)((req, res, next)
         if (!timeLimit || isNaN(parsedTimeLimit) || parsedTimeLimit <= 0) {
             return next(new ErrorHandler_1.default("timeLimit is required and must be a positive number (in hours)", 400));
         }
+        // Get package type and calculate totalBudget
+        const packageType = ((_d = packageData.name) === null || _d === void 0 ? void 0 : _d.toLowerCase()) === "premium" ? "premium" : "basic";
+        const basePrice = PACKAGE_PRICES[packageType];
+        const durationFactor = calculateDurationFactor(parsedTimeLimit);
+        const totalBudget = Math.round(basePrice * durationFactor);
         // Set placeholder dates - actual dates will be set when payment is made
         const currentDate = new Date();
         const placeholderEndDate = new Date(currentDate.getTime() + parsedTimeLimit * 60 * 60 * 1000);
@@ -188,6 +220,7 @@ exports.createCampaign = (0, catchAsyncError_1.CatchAsyncError)((req, res, next)
         const campaignData = {
             brandId: brandUser._id,
             packageId: packageId,
+            packageType: packageType,
             gameType: campaignGameType,
             title: title.trim(),
             description: description.trim(),
@@ -199,6 +232,9 @@ exports.createCampaign = (0, catchAsyncError_1.CatchAsyncError)((req, res, next)
             timeLimit: parsedTimeLimit,
             status: "draft", // Always start as draft
             paymentStatus: "unpaid", // All new campaigns start as unpaid
+            totalBudget: totalBudget,
+            budgetRemaining: totalBudget,
+            budgetUsed: 0,
             startDate: currentDate, // Placeholder - will be updated on payment
             endDate: placeholderEndDate, // Placeholder - will be updated on payment
         };
@@ -213,10 +249,12 @@ exports.createCampaign = (0, catchAsyncError_1.CatchAsyncError)((req, res, next)
         const campaignResponse = campaign.toObject();
         // Add package name to response
         const responseWithPackageName = Object.assign(Object.assign({}, campaignResponse), { packageName: packageData.name });
-        console.log('Campaign created. Has campaignUrl?', 'campaignUrl' in responseWithPackageName);
-        console.log('campaignUrl value in response:', responseWithPackageName.campaignUrl);
-        console.log('brandUrl value in response:', responseWithPackageName.brandUrl);
-        res.status(201).json({ success: true, campaign: responseWithPackageName });
+        console.log("Campaign created. Has campaignUrl?", "campaignUrl" in responseWithPackageName);
+        console.log("campaignUrl value in response:", responseWithPackageName.campaignUrl);
+        console.log("brandUrl value in response:", responseWithPackageName.brandUrl);
+        res
+            .status(201)
+            .json({ success: true, campaign: responseWithPackageName });
     }
     catch (error) {
         return next(new ErrorHandler_1.default(`Failed to create campaign: ${error.message}`, 500));
@@ -282,7 +320,9 @@ exports.getAllBrands = (0, catchAsyncError_1.CatchAsyncError)((req, res, next) =
             .lean();
         // Get brand details for each brand user
         const brands = yield Promise.all(brandUsers.map((brandUser) => __awaiter(void 0, void 0, void 0, function* () {
-            const brandProfile = yield brand_model_1.default.findOne({ userId: brandUser._id }).lean();
+            const brandProfile = yield brand_model_1.default.findOne({
+                userId: brandUser._id,
+            }).lean();
             const campaignCount = yield puzzleCampaign_model_1.default.countDocuments({
                 brandId: brandUser._id,
             });

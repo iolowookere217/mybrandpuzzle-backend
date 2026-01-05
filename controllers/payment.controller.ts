@@ -15,7 +15,10 @@ const FRONTEND_URL = process.env.FRONTEND_URL || "http://localhost:3000";
 if (!PAYSTACK_SECRET_KEY) {
   console.error("⚠️  PAYSTACK_SECRET_KEY is not configured in .env file!");
 } else {
-  console.log("✅ Paystack configured:", PAYSTACK_SECRET_KEY.substring(0, 8) + "...");
+  console.log(
+    "✅ Paystack configured:",
+    PAYSTACK_SECRET_KEY.substring(0, 8) + "..."
+  );
 }
 
 // Log Frontend URL configuration
@@ -37,21 +40,12 @@ const DAILY_RATES = {
 export const initializePayment = CatchAsyncError(
   async (req: Request, res: Response, next: NextFunction) => {
     try {
-      const { campaignId, packageType, email } = req.body;
+      const { campaignId, email } = req.body;
       const user = req.user as any;
 
-      if (!campaignId || !packageType || !email) {
+      if (!campaignId || !email) {
         return next(
-          new ErrorHandler(
-            "Missing required fields: campaignId, packageType, email",
-            400
-          )
-        );
-      }
-
-      if (packageType !== "basic" && packageType !== "premium") {
-        return next(
-          new ErrorHandler("Package type must be either 'basic' or 'premium'", 400)
+          new ErrorHandler("Missing required fields: campaignId, email", 400)
         );
       }
 
@@ -64,11 +58,20 @@ export const initializePayment = CatchAsyncError(
       // Verify brand owns this campaign
       if (campaign.brandId !== String(user._id)) {
         return next(
-          new ErrorHandler("You are not authorized to pay for this campaign", 403)
+          new ErrorHandler(
+            "You are not authorized to pay for this campaign",
+            403
+          )
         );
       }
 
-      const amount = PACKAGE_PRICES[packageType as "basic" | "premium"];
+      // Use the pre-calculated totalBudget from campaign
+      const amount =
+        campaign.totalBudget ||
+        PACKAGE_PRICES[campaign.packageType as "basic" | "premium"] ||
+        0;
+      const packageType = campaign.packageType || "basic";
+
       const reference = `campaign_${campaignId}_${Date.now()}_${Math.random()
         .toString(36)
         .substring(7)}`;
@@ -154,7 +157,9 @@ export const verifyPayment = CatchAsyncError(
       }
 
       // Validate that the transaction belongs to the campaign
-      const campaign = await PuzzleCampaignModel.findById(transaction.campaignId);
+      const campaign = await PuzzleCampaignModel.findById(
+        transaction.campaignId
+      );
       if (!campaign) {
         return next(new ErrorHandler("Campaign not found", 404));
       }
@@ -192,7 +197,9 @@ export const verifyPayment = CatchAsyncError(
           const packageType = transaction.packageType as "basic" | "premium";
           const now = new Date();
           const timeLimitInHours = campaign.timeLimit;
-          const endDate = new Date(now.getTime() + timeLimitInHours * 60 * 60 * 1000);
+          const endDate = new Date(
+            now.getTime() + timeLimitInHours * 60 * 60 * 1000
+          );
 
           campaign.packageType = packageType;
           campaign.totalBudget = transaction.amount;
@@ -262,12 +269,16 @@ export const paystackWebhook = CatchAsyncError(
           await transaction.save();
 
           // Update campaign and activate it
-          const campaign = await PuzzleCampaignModel.findById(metadata.campaignId);
+          const campaign = await PuzzleCampaignModel.findById(
+            metadata.campaignId
+          );
           if (campaign) {
             const packageType = transaction.packageType as "basic" | "premium";
             const now = new Date();
             const timeLimitInHours = campaign.timeLimit;
-            const endDate = new Date(now.getTime() + timeLimitInHours * 60 * 60 * 1000);
+            const endDate = new Date(
+              now.getTime() + timeLimitInHours * 60 * 60 * 1000
+            );
 
             campaign.packageType = packageType;
             campaign.totalBudget = transaction.amount;
@@ -325,7 +336,10 @@ export const getCampaignBudget = CatchAsyncError(
       });
     } catch (error: any) {
       return next(
-        new ErrorHandler(`Failed to fetch campaign budget: ${error.message}`, 500)
+        new ErrorHandler(
+          `Failed to fetch campaign budget: ${error.message}`,
+          500
+        )
       );
     }
   }
@@ -347,7 +361,10 @@ export const getTransactionHistory = CatchAsyncError(
       });
     } catch (error: any) {
       return next(
-        new ErrorHandler(`Failed to fetch transaction history: ${error.message}`, 500)
+        new ErrorHandler(
+          `Failed to fetch transaction history: ${error.message}`,
+          500
+        )
       );
     }
   }

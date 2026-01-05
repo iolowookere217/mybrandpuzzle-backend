@@ -38,17 +38,26 @@ exports.getActiveCampaigns = (0, catchAsyncError_1.CatchAsyncError)((req, res, n
         const { gameType } = req.query;
         // Build filter for active campaigns only
         const filter = { status: "active" };
-        const validGameTypes = ["sliding_puzzle", "card_matching", "whack_a_mole", "word_hunt"];
+        const validGameTypes = [
+            "sliding_puzzle",
+            "card_matching",
+            "whack_a_mole",
+            "word_hunt",
+        ];
         if (gameType && validGameTypes.includes(gameType)) {
             filter.gameType = gameType;
         }
         const campaigns = yield puzzleCampaign_model_1.default.find(filter)
-            .select("_id brandId packageId gameType title description brandUrl campaignUrl puzzleImageUrl timeLimit questions words status paymentStatus startDate endDate createdAt")
+            .select("_id brandId packageId gameType title description brandUrl campaignUrl puzzleImageUrl originalImageUrl timeLimit questions words status paymentStatus packageType totalBudget dailyAllocation budgetRemaining budgetUsed transactionId startDate endDate createdAt")
             .lean();
         // Fetch brand names and package names for all campaigns
         const campaignsWithBrand = yield Promise.all(campaigns.map((campaign) => __awaiter(void 0, void 0, void 0, function* () {
-            const brand = yield user_model_1.default.findById(campaign.brandId).select("name companyName").lean();
-            const packageData = yield package_model_1.default.findById(campaign.packageId).select("name").lean();
+            const brand = yield user_model_1.default.findById(campaign.brandId)
+                .select("name companyName")
+                .lean();
+            const packageData = yield package_model_1.default.findById(campaign.packageId)
+                .select("name")
+                .lean();
             return {
                 _id: campaign._id,
                 brandId: campaign.brandId,
@@ -61,11 +70,18 @@ exports.getActiveCampaigns = (0, catchAsyncError_1.CatchAsyncError)((req, res, n
                 brandUrl: campaign.brandUrl,
                 campaignUrl: campaign.campaignUrl,
                 puzzleImageUrl: campaign.puzzleImageUrl,
+                originalImageUrl: campaign.originalImageUrl,
                 timeLimit: campaign.timeLimit,
                 questions: campaign.questions,
                 words: campaign.words,
                 status: campaign.status,
                 paymentStatus: campaign.paymentStatus || "unpaid",
+                packageType: campaign.packageType || null,
+                totalBudget: campaign.totalBudget || 0,
+                dailyAllocation: campaign.dailyAllocation || 0,
+                budgetRemaining: campaign.budgetRemaining || 0,
+                budgetUsed: campaign.budgetUsed || 0,
+                transactionId: campaign.transactionId || null,
                 startDate: campaign.startDate,
                 endDate: campaign.endDate,
                 createdAt: campaign.createdAt,
@@ -85,7 +101,12 @@ exports.getAllCampaigns = (0, catchAsyncError_1.CatchAsyncError)((req, res, next
         const { gameType, status, paymentStatus } = req.query;
         // Build filter
         const filter = {};
-        const validGameTypes = ["sliding_puzzle", "card_matching", "whack_a_mole", "word_hunt"];
+        const validGameTypes = [
+            "sliding_puzzle",
+            "card_matching",
+            "whack_a_mole",
+            "word_hunt",
+        ];
         if (gameType && validGameTypes.includes(gameType)) {
             filter.gameType = gameType;
         }
@@ -96,16 +117,21 @@ exports.getAllCampaigns = (0, catchAsyncError_1.CatchAsyncError)((req, res, next
         }
         // Filter by paymentStatus if provided
         const validPaymentStatuses = ["unpaid", "paid", "partial"];
-        if (paymentStatus && validPaymentStatuses.includes(paymentStatus)) {
+        if (paymentStatus &&
+            validPaymentStatuses.includes(paymentStatus)) {
             filter.paymentStatus = paymentStatus;
         }
         const campaigns = yield puzzleCampaign_model_1.default.find(filter)
-            .select("_id brandId packageId gameType title description brandUrl campaignUrl puzzleImageUrl timeLimit questions words status paymentStatus startDate endDate createdAt")
+            .select("_id brandId packageId gameType title description brandUrl campaignUrl puzzleImageUrl originalImageUrl timeLimit questions words status paymentStatus packageType totalBudget dailyAllocation budgetRemaining budgetUsed transactionId startDate endDate createdAt")
             .lean();
         // Fetch brand names and package names for all campaigns
         const campaignsWithBrand = yield Promise.all(campaigns.map((campaign) => __awaiter(void 0, void 0, void 0, function* () {
-            const brand = yield user_model_1.default.findById(campaign.brandId).select("name companyName").lean();
-            const packageData = yield package_model_1.default.findById(campaign.packageId).select("name").lean();
+            const brand = yield user_model_1.default.findById(campaign.brandId)
+                .select("name companyName")
+                .lean();
+            const packageData = yield package_model_1.default.findById(campaign.packageId)
+                .select("name")
+                .lean();
             return {
                 _id: campaign._id,
                 brandId: campaign.brandId,
@@ -118,11 +144,18 @@ exports.getAllCampaigns = (0, catchAsyncError_1.CatchAsyncError)((req, res, next
                 brandUrl: campaign.brandUrl,
                 campaignUrl: campaign.campaignUrl,
                 puzzleImageUrl: campaign.puzzleImageUrl,
+                originalImageUrl: campaign.originalImageUrl,
                 timeLimit: campaign.timeLimit,
                 questions: campaign.questions,
                 words: campaign.words,
                 status: campaign.status,
                 paymentStatus: campaign.paymentStatus || "unpaid",
+                packageType: campaign.packageType || null,
+                totalBudget: campaign.totalBudget || 0,
+                dailyAllocation: campaign.dailyAllocation || 0,
+                budgetRemaining: campaign.budgetRemaining || 0,
+                budgetUsed: campaign.budgetUsed || 0,
+                transactionId: campaign.transactionId || null,
                 startDate: campaign.startDate,
                 endDate: campaign.endDate,
                 createdAt: campaign.createdAt,
@@ -141,17 +174,21 @@ exports.getCampaignsByBrand = (0, catchAsyncError_1.CatchAsyncError)((req, res, 
         yield updateExpiredCampaigns();
         const { brandId } = req.params;
         const campaigns = yield puzzleCampaign_model_1.default.find({ brandId })
-            .select("_id brandId packageId gameType title description brandUrl campaignUrl puzzleImageUrl timeLimit questions words status paymentStatus startDate endDate createdAt")
+            .select("_id brandId packageId gameType title description brandUrl campaignUrl puzzleImageUrl originalImageUrl timeLimit questions words status paymentStatus packageType totalBudget dailyAllocation budgetRemaining budgetUsed transactionId startDate endDate createdAt")
             .lean();
         if (!campaigns || campaigns.length === 0) {
             return res.status(200).json({ success: true, campaigns: [] });
         }
         // Fetch brand name
-        const brand = yield user_model_1.default.findById(brandId).select("name companyName").lean();
+        const brand = yield user_model_1.default.findById(brandId)
+            .select("name companyName")
+            .lean();
         const brandName = (brand === null || brand === void 0 ? void 0 : brand.companyName) || (brand === null || brand === void 0 ? void 0 : brand.name) || "Unknown Brand";
         // Fetch package names for all campaigns
         const campaignsWithBrand = yield Promise.all(campaigns.map((campaign) => __awaiter(void 0, void 0, void 0, function* () {
-            const packageData = yield package_model_1.default.findById(campaign.packageId).select("name").lean();
+            const packageData = yield package_model_1.default.findById(campaign.packageId)
+                .select("name")
+                .lean();
             return {
                 _id: campaign._id,
                 brandId: campaign.brandId,
@@ -164,11 +201,18 @@ exports.getCampaignsByBrand = (0, catchAsyncError_1.CatchAsyncError)((req, res, 
                 brandUrl: campaign.brandUrl,
                 campaignUrl: campaign.campaignUrl,
                 puzzleImageUrl: campaign.puzzleImageUrl,
+                originalImageUrl: campaign.originalImageUrl,
                 timeLimit: campaign.timeLimit,
                 questions: campaign.questions,
                 words: campaign.words,
                 status: campaign.status,
                 paymentStatus: campaign.paymentStatus || "unpaid",
+                packageType: campaign.packageType || null,
+                totalBudget: campaign.totalBudget || 0,
+                dailyAllocation: campaign.dailyAllocation || 0,
+                budgetRemaining: campaign.budgetRemaining || 0,
+                budgetUsed: campaign.budgetUsed || 0,
+                transactionId: campaign.transactionId || null,
                 startDate: campaign.startDate,
                 endDate: campaign.endDate,
                 createdAt: campaign.createdAt,
@@ -191,9 +235,13 @@ exports.getCampaignById = (0, catchAsyncError_1.CatchAsyncError)((req, res, next
             return next(new ErrorHandler_1.default("Campaign not found", 404));
         }
         // Fetch brand name and package name
-        const brand = yield user_model_1.default.findById(campaign.brandId).select("name companyName").lean();
+        const brand = yield user_model_1.default.findById(campaign.brandId)
+            .select("name companyName")
+            .lean();
         const brandName = (brand === null || brand === void 0 ? void 0 : brand.companyName) || (brand === null || brand === void 0 ? void 0 : brand.name) || "Unknown Brand";
-        const packageData = yield package_model_1.default.findById(campaign.packageId).select("name").lean();
+        const packageData = yield package_model_1.default.findById(campaign.packageId)
+            .select("name")
+            .lean();
         res.status(200).json({
             success: true,
             campaign: {

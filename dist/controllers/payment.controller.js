@@ -44,13 +44,10 @@ const DAILY_RATES = {
 // Initialize payment for campaign
 exports.initializePayment = (0, catchAsyncError_1.CatchAsyncError)((req, res, next) => __awaiter(void 0, void 0, void 0, function* () {
     try {
-        const { campaignId, packageType, email } = req.body;
+        const { campaignId, email } = req.body;
         const user = req.user;
-        if (!campaignId || !packageType || !email) {
-            return next(new ErrorHandler_1.default("Missing required fields: campaignId, packageType, email", 400));
-        }
-        if (packageType !== "basic" && packageType !== "premium") {
-            return next(new ErrorHandler_1.default("Package type must be either 'basic' or 'premium'", 400));
+        if (!campaignId || !email) {
+            return next(new ErrorHandler_1.default("Missing required fields: campaignId, email", 400));
         }
         // Check if campaign exists
         const campaign = yield puzzleCampaign_model_1.default.findById(campaignId);
@@ -61,7 +58,11 @@ exports.initializePayment = (0, catchAsyncError_1.CatchAsyncError)((req, res, ne
         if (campaign.brandId !== String(user._id)) {
             return next(new ErrorHandler_1.default("You are not authorized to pay for this campaign", 403));
         }
-        const amount = PACKAGE_PRICES[packageType];
+        // Use the pre-calculated totalBudget from campaign
+        const amount = campaign.totalBudget ||
+            PACKAGE_PRICES[campaign.packageType] ||
+            0;
+        const packageType = campaign.packageType || "basic";
         const reference = `campaign_${campaignId}_${Date.now()}_${Math.random()
             .toString(36)
             .substring(7)}`;

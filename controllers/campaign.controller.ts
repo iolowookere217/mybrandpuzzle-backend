@@ -32,20 +32,31 @@ export const getActiveCampaigns = CatchAsyncError(
 
       // Build filter for active campaigns only
       const filter: any = { status: "active" };
-      const validGameTypes = ["sliding_puzzle", "card_matching", "whack_a_mole", "word_hunt"];
+      const validGameTypes = [
+        "sliding_puzzle",
+        "card_matching",
+        "whack_a_mole",
+        "word_hunt",
+      ];
       if (gameType && validGameTypes.includes(gameType as string)) {
         filter.gameType = gameType;
       }
 
       const campaigns = await PuzzleCampaignModel.find(filter)
-        .select("_id brandId packageId gameType title description brandUrl campaignUrl puzzleImageUrl timeLimit questions words status paymentStatus startDate endDate createdAt")
+        .select(
+          "_id brandId packageId gameType title description brandUrl campaignUrl puzzleImageUrl originalImageUrl timeLimit questions words status paymentStatus packageType totalBudget dailyAllocation budgetRemaining budgetUsed transactionId startDate endDate createdAt"
+        )
         .lean();
 
       // Fetch brand names and package names for all campaigns
       const campaignsWithBrand = await Promise.all(
         campaigns.map(async (campaign) => {
-          const brand = await UserModel.findById(campaign.brandId).select("name companyName").lean();
-          const packageData = await PackageModel.findById(campaign.packageId).select("name").lean();
+          const brand = await UserModel.findById(campaign.brandId)
+            .select("name companyName")
+            .lean();
+          const packageData = await PackageModel.findById(campaign.packageId)
+            .select("name")
+            .lean();
           return {
             _id: campaign._id,
             brandId: campaign.brandId,
@@ -58,11 +69,18 @@ export const getActiveCampaigns = CatchAsyncError(
             brandUrl: campaign.brandUrl,
             campaignUrl: campaign.campaignUrl,
             puzzleImageUrl: campaign.puzzleImageUrl,
+            originalImageUrl: campaign.originalImageUrl,
             timeLimit: campaign.timeLimit,
             questions: campaign.questions,
             words: campaign.words,
             status: campaign.status,
             paymentStatus: (campaign as any).paymentStatus || "unpaid",
+            packageType: (campaign as any).packageType || null,
+            totalBudget: (campaign as any).totalBudget || 0,
+            dailyAllocation: (campaign as any).dailyAllocation || 0,
+            budgetRemaining: (campaign as any).budgetRemaining || 0,
+            budgetUsed: (campaign as any).budgetUsed || 0,
+            transactionId: (campaign as any).transactionId || null,
             startDate: campaign.startDate,
             endDate: campaign.endDate,
             createdAt: (campaign as any).createdAt,
@@ -72,7 +90,12 @@ export const getActiveCampaigns = CatchAsyncError(
 
       res.status(200).json({ success: true, campaigns: campaignsWithBrand });
     } catch (error: any) {
-      return next(new ErrorHandler(`Failed to fetch active campaigns: ${error.message}`, 500));
+      return next(
+        new ErrorHandler(
+          `Failed to fetch active campaigns: ${error.message}`,
+          500
+        )
+      );
     }
   }
 );
@@ -88,7 +111,12 @@ export const getAllCampaigns = CatchAsyncError(
 
       // Build filter
       const filter: any = {};
-      const validGameTypes = ["sliding_puzzle", "card_matching", "whack_a_mole", "word_hunt"];
+      const validGameTypes = [
+        "sliding_puzzle",
+        "card_matching",
+        "whack_a_mole",
+        "word_hunt",
+      ];
       if (gameType && validGameTypes.includes(gameType as string)) {
         filter.gameType = gameType;
       }
@@ -101,19 +129,28 @@ export const getAllCampaigns = CatchAsyncError(
 
       // Filter by paymentStatus if provided
       const validPaymentStatuses = ["unpaid", "paid", "partial"];
-      if (paymentStatus && validPaymentStatuses.includes(paymentStatus as string)) {
+      if (
+        paymentStatus &&
+        validPaymentStatuses.includes(paymentStatus as string)
+      ) {
         filter.paymentStatus = paymentStatus;
       }
 
       const campaigns = await PuzzleCampaignModel.find(filter)
-        .select("_id brandId packageId gameType title description brandUrl campaignUrl puzzleImageUrl timeLimit questions words status paymentStatus startDate endDate createdAt")
+        .select(
+          "_id brandId packageId gameType title description brandUrl campaignUrl puzzleImageUrl originalImageUrl timeLimit questions words status paymentStatus packageType totalBudget dailyAllocation budgetRemaining budgetUsed transactionId startDate endDate createdAt"
+        )
         .lean();
 
       // Fetch brand names and package names for all campaigns
       const campaignsWithBrand = await Promise.all(
         campaigns.map(async (campaign) => {
-          const brand = await UserModel.findById(campaign.brandId).select("name companyName").lean();
-          const packageData = await PackageModel.findById(campaign.packageId).select("name").lean();
+          const brand = await UserModel.findById(campaign.brandId)
+            .select("name companyName")
+            .lean();
+          const packageData = await PackageModel.findById(campaign.packageId)
+            .select("name")
+            .lean();
           return {
             _id: campaign._id,
             brandId: campaign.brandId,
@@ -126,11 +163,18 @@ export const getAllCampaigns = CatchAsyncError(
             brandUrl: campaign.brandUrl,
             campaignUrl: campaign.campaignUrl,
             puzzleImageUrl: campaign.puzzleImageUrl,
+            originalImageUrl: campaign.originalImageUrl,
             timeLimit: campaign.timeLimit,
             questions: campaign.questions,
             words: campaign.words,
             status: campaign.status,
             paymentStatus: (campaign as any).paymentStatus || "unpaid",
+            packageType: (campaign as any).packageType || null,
+            totalBudget: (campaign as any).totalBudget || 0,
+            dailyAllocation: (campaign as any).dailyAllocation || 0,
+            budgetRemaining: (campaign as any).budgetRemaining || 0,
+            budgetUsed: (campaign as any).budgetUsed || 0,
+            transactionId: (campaign as any).transactionId || null,
             startDate: campaign.startDate,
             endDate: campaign.endDate,
             createdAt: (campaign as any).createdAt,
@@ -140,7 +184,9 @@ export const getAllCampaigns = CatchAsyncError(
 
       res.status(200).json({ success: true, campaigns: campaignsWithBrand });
     } catch (error: any) {
-      return next(new ErrorHandler(`Failed to fetch campaigns: ${error.message}`, 500));
+      return next(
+        new ErrorHandler(`Failed to fetch campaigns: ${error.message}`, 500)
+      );
     }
   }
 );
@@ -155,7 +201,9 @@ export const getCampaignsByBrand = CatchAsyncError(
       const { brandId } = req.params;
 
       const campaigns = await PuzzleCampaignModel.find({ brandId })
-        .select("_id brandId packageId gameType title description brandUrl campaignUrl puzzleImageUrl timeLimit questions words status paymentStatus startDate endDate createdAt")
+        .select(
+          "_id brandId packageId gameType title description brandUrl campaignUrl puzzleImageUrl originalImageUrl timeLimit questions words status paymentStatus packageType totalBudget dailyAllocation budgetRemaining budgetUsed transactionId startDate endDate createdAt"
+        )
         .lean();
 
       if (!campaigns || campaigns.length === 0) {
@@ -163,13 +211,17 @@ export const getCampaignsByBrand = CatchAsyncError(
       }
 
       // Fetch brand name
-      const brand = await UserModel.findById(brandId).select("name companyName").lean();
+      const brand = await UserModel.findById(brandId)
+        .select("name companyName")
+        .lean();
       const brandName = brand?.companyName || brand?.name || "Unknown Brand";
 
       // Fetch package names for all campaigns
       const campaignsWithBrand = await Promise.all(
         campaigns.map(async (campaign) => {
-          const packageData = await PackageModel.findById(campaign.packageId).select("name").lean();
+          const packageData = await PackageModel.findById(campaign.packageId)
+            .select("name")
+            .lean();
           return {
             _id: campaign._id,
             brandId: campaign.brandId,
@@ -182,11 +234,18 @@ export const getCampaignsByBrand = CatchAsyncError(
             brandUrl: campaign.brandUrl,
             campaignUrl: campaign.campaignUrl,
             puzzleImageUrl: campaign.puzzleImageUrl,
+            originalImageUrl: campaign.originalImageUrl,
             timeLimit: campaign.timeLimit,
             questions: campaign.questions,
             words: campaign.words,
             status: campaign.status,
             paymentStatus: (campaign as any).paymentStatus || "unpaid",
+            packageType: (campaign as any).packageType || null,
+            totalBudget: (campaign as any).totalBudget || 0,
+            dailyAllocation: (campaign as any).dailyAllocation || 0,
+            budgetRemaining: (campaign as any).budgetRemaining || 0,
+            budgetUsed: (campaign as any).budgetUsed || 0,
+            transactionId: (campaign as any).transactionId || null,
             startDate: campaign.startDate,
             endDate: campaign.endDate,
             createdAt: (campaign as any).createdAt,
@@ -196,7 +255,12 @@ export const getCampaignsByBrand = CatchAsyncError(
 
       res.status(200).json({ success: true, campaigns: campaignsWithBrand });
     } catch (error: any) {
-      return next(new ErrorHandler(`Failed to fetch campaigns for brand: ${error.message}`, 500));
+      return next(
+        new ErrorHandler(
+          `Failed to fetch campaigns for brand: ${error.message}`,
+          500
+        )
+      );
     }
   }
 );
@@ -216,9 +280,13 @@ export const getCampaignById = CatchAsyncError(
       }
 
       // Fetch brand name and package name
-      const brand = await UserModel.findById(campaign.brandId).select("name companyName").lean();
+      const brand = await UserModel.findById(campaign.brandId)
+        .select("name companyName")
+        .lean();
       const brandName = brand?.companyName || brand?.name || "Unknown Brand";
-      const packageData = await PackageModel.findById(campaign.packageId).select("name").lean();
+      const packageData = await PackageModel.findById(campaign.packageId)
+        .select("name")
+        .lean();
 
       res.status(200).json({
         success: true,
@@ -256,7 +324,12 @@ export const getCampaignById = CatchAsyncError(
         },
       });
     } catch (error: any) {
-      return next(new ErrorHandler(`Failed to fetch campaign details: ${error.message}`, 500));
+      return next(
+        new ErrorHandler(
+          `Failed to fetch campaign details: ${error.message}`,
+          500
+        )
+      );
     }
   }
 );
@@ -287,7 +360,12 @@ export const checkCampaignCompletion = CatchAsyncError(
         hasCompletedByCurrentUser,
       });
     } catch (error: any) {
-      return next(new ErrorHandler(`Failed to check campaign completion status: ${error.message}`, 500));
+      return next(
+        new ErrorHandler(
+          `Failed to check campaign completion status: ${error.message}`,
+          500
+        )
+      );
     }
   }
 );
@@ -310,7 +388,12 @@ export const submitCampaign = CatchAsyncError(
 
       const campaign = await PuzzleCampaignModel.findById(campaignId);
       if (!campaign) {
-        return next(new ErrorHandler("Campaign not found. Please check the campaign ID and try again.", 404));
+        return next(
+          new ErrorHandler(
+            "Campaign not found. Please check the campaign ID and try again.",
+            404
+          )
+        );
       }
 
       // compute quiz score
@@ -321,7 +404,9 @@ export const submitCampaign = CatchAsyncError(
           i < Math.min(body.answers.length, campaign.questions.length);
           i++
         ) {
-          console.log(`Question ${i}: User answered ${body.answers[i]}, Correct answer is ${campaign.questions[i].correctIndex}`);
+          console.log(
+            `Question ${i}: User answered ${body.answers[i]}, Correct answer is ${campaign.questions[i].correctIndex}`
+          );
           if (body.answers[i] === campaign.questions[i].correctIndex) {
             quizScore++;
           }
@@ -332,7 +417,9 @@ export const submitCampaign = CatchAsyncError(
       const totalQuestions = campaign.questions.length;
       const allQuestionsCorrect = quizScore === totalQuestions;
 
-      console.log(`Quiz Score: ${quizScore}/${totalQuestions}, All Correct: ${allQuestionsCorrect}`);
+      console.log(
+        `Quiz Score: ${quizScore}/${totalQuestions}, All Correct: ${allQuestionsCorrect}`
+      );
       console.log(`Solved: ${body.solved}`);
 
       // determine if first-time solved
@@ -472,7 +559,12 @@ export const submitCampaign = CatchAsyncError(
         gameType: campaign.gameType,
       });
     } catch (error: any) {
-      return next(new ErrorHandler(`Failed to submit campaign result: ${error.message}`, 500));
+      return next(
+        new ErrorHandler(
+          `Failed to submit campaign result: ${error.message}`,
+          500
+        )
+      );
     }
   }
 );
