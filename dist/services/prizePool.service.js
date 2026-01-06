@@ -24,9 +24,9 @@ const DAILY_RATES = {
 };
 // Prize distribution percentages for top 10
 const PRIZE_DISTRIBUTION = [
-    { position: 1, percentage: 0.20 }, // 20%
+    { position: 1, percentage: 0.2 }, // 20%
     { position: 2, percentage: 0.15 }, // 15%
-    { position: 3, percentage: 0.10 }, // 10%
+    { position: 3, percentage: 0.1 }, // 10%
     { position: 4, percentage: 0.07875 }, // 7.875%
     { position: 5, percentage: 0.07875 }, // 7.875%
     { position: 6, percentage: 0.07875 }, // 7.875%
@@ -54,7 +54,9 @@ const calculateDailyPrizePool = (date) => __awaiter(void 0, void 0, void 0, func
         for (const campaign of activeCampaigns) {
             if (campaign.budgetRemaining && campaign.budgetRemaining > 0) {
                 const packageType = campaign.packageType;
-                const dailyAllocation = DAILY_RATES[packageType];
+                // Prefer campaign-specific dailyAllocation (set at payment), fallback to legacy DAILY_RATES
+                const dailyAllocation = (campaign.dailyAllocation && Number(campaign.dailyAllocation)) ||
+                    DAILY_RATES[packageType];
                 // Add to pool
                 campaignAllocations.push({
                     campaignId: String(campaign._id),
@@ -64,13 +66,14 @@ const calculateDailyPrizePool = (date) => __awaiter(void 0, void 0, void 0, func
                 totalDailyPool += dailyAllocation;
                 // Update campaign budget
                 campaign.budgetUsed = (campaign.budgetUsed || 0) + dailyAllocation;
-                campaign.budgetRemaining = (campaign.budgetRemaining || 0) - dailyAllocation;
+                campaign.budgetRemaining =
+                    (campaign.budgetRemaining || 0) - dailyAllocation;
                 yield campaign.save();
             }
         }
         // Calculate 70-30 split
-        const gamerShare = totalDailyPool * 0.70;
-        const platformFee = totalDailyPool * 0.30;
+        const gamerShare = totalDailyPool * 0.7;
+        const platformFee = totalDailyPool * 0.3;
         // Create or update daily prize pool
         const prizePool = yield dailyPrizePool_model_1.default.findOneAndUpdate({ date }, {
             date,
@@ -140,7 +143,7 @@ const calculateWeeklyPayouts = (weekKey) => __awaiter(void 0, void 0, void 0, fu
         });
         // Calculate total weekly pool
         const totalWeeklyPool = dailyPools.reduce((sum, pool) => sum + pool.totalDailyPool, 0);
-        const weeklyGamerShare = totalWeeklyPool * 0.70;
+        const weeklyGamerShare = totalWeeklyPool * 0.7;
         // Create payouts for each gamer
         const payouts = [];
         for (let i = 0; i < topGamers.length; i++) {
@@ -168,7 +171,7 @@ const calculateWeeklyPayouts = (weekKey) => __awaiter(void 0, void 0, void 0, fu
             weekKey,
             totalWeeklyPool,
             weeklyGamerShare,
-            platformFee: totalWeeklyPool * 0.30,
+            platformFee: totalWeeklyPool * 0.3,
             payouts,
         };
     }
@@ -217,8 +220,8 @@ const getWeeklyPrizePoolSummary = () => __awaiter(void 0, void 0, void 0, functi
             weekEnd,
             dailyPools: dailyPools.length,
             totalWeeklyPool,
-            weeklyGamerShare: totalWeeklyPool * 0.70,
-            weeklyPlatformFee: totalWeeklyPool * 0.30,
+            weeklyGamerShare: totalWeeklyPool * 0.7,
+            weeklyPlatformFee: totalWeeklyPool * 0.3,
         };
     }
     catch (error) {

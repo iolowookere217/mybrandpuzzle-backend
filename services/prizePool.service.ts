@@ -11,9 +11,9 @@ const DAILY_RATES = {
 
 // Prize distribution percentages for top 10
 const PRIZE_DISTRIBUTION = [
-  { position: 1, percentage: 0.20 }, // 20%
+  { position: 1, percentage: 0.2 }, // 20%
   { position: 2, percentage: 0.15 }, // 15%
-  { position: 3, percentage: 0.10 }, // 10%
+  { position: 3, percentage: 0.1 }, // 10%
   { position: 4, percentage: 0.07875 }, // 7.875%
   { position: 5, percentage: 0.07875 }, // 7.875%
   { position: 6, percentage: 0.07875 }, // 7.875%
@@ -45,7 +45,10 @@ export const calculateDailyPrizePool = async (date: string): Promise<any> => {
     for (const campaign of activeCampaigns) {
       if (campaign.budgetRemaining && campaign.budgetRemaining > 0) {
         const packageType = campaign.packageType as "basic" | "premium";
-        const dailyAllocation = DAILY_RATES[packageType];
+        // Prefer campaign-specific dailyAllocation (set at payment), fallback to legacy DAILY_RATES
+        const dailyAllocation =
+          (campaign.dailyAllocation && Number(campaign.dailyAllocation)) ||
+          DAILY_RATES[packageType];
 
         // Add to pool
         campaignAllocations.push({
@@ -58,14 +61,15 @@ export const calculateDailyPrizePool = async (date: string): Promise<any> => {
 
         // Update campaign budget
         campaign.budgetUsed = (campaign.budgetUsed || 0) + dailyAllocation;
-        campaign.budgetRemaining = (campaign.budgetRemaining || 0) - dailyAllocation;
+        campaign.budgetRemaining =
+          (campaign.budgetRemaining || 0) - dailyAllocation;
         await campaign.save();
       }
     }
 
     // Calculate 70-30 split
-    const gamerShare = totalDailyPool * 0.70;
-    const platformFee = totalDailyPool * 0.30;
+    const gamerShare = totalDailyPool * 0.7;
+    const platformFee = totalDailyPool * 0.3;
 
     // Create or update daily prize pool
     const prizePool = await DailyPrizePoolModel.findOneAndUpdate(
@@ -155,7 +159,7 @@ export const calculateWeeklyPayouts = async (weekKey: string): Promise<any> => {
       (sum, pool) => sum + pool.totalDailyPool,
       0
     );
-    const weeklyGamerShare = totalWeeklyPool * 0.70;
+    const weeklyGamerShare = totalWeeklyPool * 0.7;
 
     // Create payouts for each gamer
     const payouts = [];
@@ -193,7 +197,7 @@ export const calculateWeeklyPayouts = async (weekKey: string): Promise<any> => {
       weekKey,
       totalWeeklyPool,
       weeklyGamerShare,
-      platformFee: totalWeeklyPool * 0.30,
+      platformFee: totalWeeklyPool * 0.3,
       payouts,
     };
   } catch (error) {
@@ -249,8 +253,8 @@ export const getWeeklyPrizePoolSummary = async (): Promise<any> => {
       weekEnd,
       dailyPools: dailyPools.length,
       totalWeeklyPool,
-      weeklyGamerShare: totalWeeklyPool * 0.70,
-      weeklyPlatformFee: totalWeeklyPool * 0.30,
+      weeklyGamerShare: totalWeeklyPool * 0.7,
+      weeklyPlatformFee: totalWeeklyPool * 0.3,
     };
   } catch (error) {
     throw error;

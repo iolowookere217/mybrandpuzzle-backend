@@ -58,8 +58,10 @@ exports.initializePayment = (0, catchAsyncError_1.CatchAsyncError)((req, res, ne
         if (campaign.brandId !== String(user._id)) {
             return next(new ErrorHandler_1.default("You are not authorized to pay for this campaign", 403));
         }
-        // Use the pre-calculated totalBudget from campaign
-        const amount = campaign.totalBudget ||
+        // Use the pre-calculated expectedChargeAmount (discounted) if available,
+        // otherwise fallback to campaign.totalBudget or package base price
+        const amount = campaign.expectedChargeAmount ||
+            campaign.totalBudget ||
             PACKAGE_PRICES[campaign.packageType] ||
             0;
         const packageType = campaign.packageType || "basic";
@@ -153,10 +155,14 @@ exports.verifyPayment = (0, catchAsyncError_1.CatchAsyncError)((req, res, next) 
                 const now = new Date();
                 const timeLimitInHours = campaign.timeLimit;
                 const endDate = new Date(now.getTime() + timeLimitInHours * 60 * 60 * 1000);
+                // Use the charged amount as the campaign's allocated budget
+                const allocatedBudget = transaction.amount || 0;
+                const days = Math.max(1, Math.ceil((campaign.timeLimit || 168) / 24));
+                const dailyAllocation = Number((allocatedBudget / days).toFixed(2));
                 campaign.packageType = packageType;
-                campaign.totalBudget = transaction.amount;
-                campaign.dailyAllocation = DAILY_RATES[packageType];
-                campaign.budgetRemaining = transaction.amount;
+                campaign.totalBudget = allocatedBudget; // allocated budget = amount paid
+                campaign.dailyAllocation = dailyAllocation;
+                campaign.budgetRemaining = allocatedBudget;
                 campaign.budgetUsed = 0;
                 campaign.paymentStatus = "paid";
                 campaign.transactionId = String(transaction._id);
@@ -217,10 +223,14 @@ exports.paystackWebhook = (0, catchAsyncError_1.CatchAsyncError)((req, res, next
                     const now = new Date();
                     const timeLimitInHours = campaign.timeLimit;
                     const endDate = new Date(now.getTime() + timeLimitInHours * 60 * 60 * 1000);
+                    // Use the charged amount as the campaign's allocated budget
+                    const allocatedBudget = transaction.amount || 0;
+                    const days = Math.max(1, Math.ceil((campaign.timeLimit || 168) / 24));
+                    const dailyAllocation = Number((allocatedBudget / days).toFixed(2));
                     campaign.packageType = packageType;
-                    campaign.totalBudget = transaction.amount;
-                    campaign.dailyAllocation = DAILY_RATES[packageType];
-                    campaign.budgetRemaining = transaction.amount;
+                    campaign.totalBudget = allocatedBudget; // allocated budget = amount paid
+                    campaign.dailyAllocation = dailyAllocation;
+                    campaign.budgetRemaining = allocatedBudget;
                     campaign.budgetUsed = 0;
                     campaign.paymentStatus = "paid";
                     campaign.transactionId = String(transaction._id);

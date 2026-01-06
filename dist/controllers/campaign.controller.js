@@ -48,7 +48,7 @@ exports.getActiveCampaigns = (0, catchAsyncError_1.CatchAsyncError)((req, res, n
             filter.gameType = gameType;
         }
         const campaigns = yield puzzleCampaign_model_1.default.find(filter)
-            .select("_id brandId packageId gameType title description brandUrl campaignUrl puzzleImageUrl originalImageUrl timeLimit questions words status paymentStatus packageType totalBudget dailyAllocation budgetRemaining budgetUsed transactionId startDate endDate createdAt")
+            .select("_id brandId packageId gameType title description brandUrl campaignUrl videoUrl puzzleImageUrl originalImageUrl timeLimit questions words status paymentStatus packageType totalBudget dailyAllocation budgetRemaining budgetUsed transactionId startDate endDate createdAt")
             .lean();
         // Fetch brand names and package names for all campaigns
         const campaignsWithBrand = yield Promise.all(campaigns.map((campaign) => __awaiter(void 0, void 0, void 0, function* () {
@@ -69,6 +69,7 @@ exports.getActiveCampaigns = (0, catchAsyncError_1.CatchAsyncError)((req, res, n
                 description: campaign.description,
                 brandUrl: campaign.brandUrl,
                 campaignUrl: campaign.campaignUrl,
+                videoUrl: campaign.videoUrl || null,
                 puzzleImageUrl: campaign.puzzleImageUrl,
                 originalImageUrl: campaign.originalImageUrl,
                 timeLimit: campaign.timeLimit,
@@ -122,7 +123,7 @@ exports.getAllCampaigns = (0, catchAsyncError_1.CatchAsyncError)((req, res, next
             filter.paymentStatus = paymentStatus;
         }
         const campaigns = yield puzzleCampaign_model_1.default.find(filter)
-            .select("_id brandId packageId gameType title description brandUrl campaignUrl puzzleImageUrl originalImageUrl timeLimit questions words status paymentStatus packageType totalBudget dailyAllocation budgetRemaining budgetUsed transactionId startDate endDate createdAt")
+            .select("_id brandId packageId gameType title description brandUrl campaignUrl videoUrl puzzleImageUrl originalImageUrl timeLimit questions words status paymentStatus packageType totalBudget dailyAllocation budgetRemaining budgetUsed transactionId startDate endDate createdAt")
             .lean();
         // Fetch brand names and package names for all campaigns
         const campaignsWithBrand = yield Promise.all(campaigns.map((campaign) => __awaiter(void 0, void 0, void 0, function* () {
@@ -143,6 +144,7 @@ exports.getAllCampaigns = (0, catchAsyncError_1.CatchAsyncError)((req, res, next
                 description: campaign.description,
                 brandUrl: campaign.brandUrl,
                 campaignUrl: campaign.campaignUrl,
+                videoUrl: campaign.videoUrl || null,
                 puzzleImageUrl: campaign.puzzleImageUrl,
                 originalImageUrl: campaign.originalImageUrl,
                 timeLimit: campaign.timeLimit,
@@ -174,7 +176,7 @@ exports.getCampaignsByBrand = (0, catchAsyncError_1.CatchAsyncError)((req, res, 
         yield updateExpiredCampaigns();
         const { brandId } = req.params;
         const campaigns = yield puzzleCampaign_model_1.default.find({ brandId })
-            .select("_id brandId packageId gameType title description brandUrl campaignUrl puzzleImageUrl originalImageUrl timeLimit questions words status paymentStatus packageType totalBudget dailyAllocation budgetRemaining budgetUsed transactionId startDate endDate createdAt")
+            .select("_id brandId packageId gameType title description brandUrl campaignUrl videoUrl puzzleImageUrl originalImageUrl timeLimit questions words status paymentStatus packageType totalBudget dailyAllocation budgetRemaining budgetUsed transactionId startDate endDate createdAt")
             .lean();
         if (!campaigns || campaigns.length === 0) {
             return res.status(200).json({ success: true, campaigns: [] });
@@ -200,6 +202,7 @@ exports.getCampaignsByBrand = (0, catchAsyncError_1.CatchAsyncError)((req, res, 
                 description: campaign.description,
                 brandUrl: campaign.brandUrl,
                 campaignUrl: campaign.campaignUrl,
+                videoUrl: campaign.videoUrl || null,
                 puzzleImageUrl: campaign.puzzleImageUrl,
                 originalImageUrl: campaign.originalImageUrl,
                 timeLimit: campaign.timeLimit,
@@ -255,6 +258,7 @@ exports.getCampaignById = (0, catchAsyncError_1.CatchAsyncError)((req, res, next
                 description: campaign.description,
                 brandUrl: campaign.brandUrl,
                 campaignUrl: campaign.campaignUrl,
+                videoUrl: campaign.videoUrl || null,
                 puzzleImageUrl: campaign.puzzleImageUrl,
                 originalImageUrl: campaign.originalImageUrl,
                 questions: campaign.questions.map((q) => ({
@@ -332,21 +336,35 @@ exports.submitCampaign = (0, catchAsyncError_1.CatchAsyncError)((req, res, next)
         const allQuestionsCorrect = quizScore === totalQuestions;
         console.log(`Quiz Score: ${quizScore}/${totalQuestions}, All Correct: ${allQuestionsCorrect}`);
         console.log(`Solved: ${body.solved}`);
-        // determine if first-time solved
+        // determine if first-time ever solved (used for unique puzzle counts)
         let firstTime = false;
         if (body.solved && allQuestionsCorrect) {
-            const prev = yield puzzleAttempt_model_1.default.findOne({
+            const prevEver = yield puzzleAttempt_model_1.default.findOne({
                 userId: userId,
                 campaignId: campaignId,
                 solved: true,
             });
-            console.log(`Previous attempt found: ${!!prev}`);
-            if (!prev)
+            console.log(`Previous successful attempt ever found: ${!!prevEver}`);
+            if (!prevEver)
                 firstTime = true;
         }
-        // Calculate points using weighted scoring formula
+        // Allow users to earn points up to 2 times per DAY for the same campaign.
+        // Count today's successful attempts for this user+campaign.
+        const now = new Date();
+        const startOfDay = new Date(now);
+        startOfDay.setHours(0, 0, 0, 0);
+        const endOfDay = new Date(now);
+        endOfDay.setHours(23, 59, 59, 999);
+        const todaysSuccessCount = yield puzzleAttempt_model_1.default.countDocuments({
+            userId: userId,
+            campaignId: campaignId,
+            solved: true,
+            timestamp: { $gte: startOfDay, $lte: endOfDay },
+        });
+        const canEarnPointsNow = body.solved && allQuestionsCorrect && todaysSuccessCount < 2;
+        // Calculate points using weighted scoring formula only if eligible
         let pointsEarned = 0;
-        if (firstTime && allQuestionsCorrect) {
+        if (canEarnPointsNow) {
             // Configuration parameters
             const basePoints = 10;
             const optimalTime = 60; // seconds
@@ -391,7 +409,7 @@ exports.submitCampaign = (0, catchAsyncError_1.CatchAsyncError)((req, res, next)
                 pointsEarned,
             });
         }
-        console.log(`First Time: ${firstTime}, Points Earned: ${pointsEarned}`);
+        console.log(`First Time: ${firstTime}, Today's successes: ${todaysSuccessCount}, Points Earned: ${pointsEarned}`);
         const attempt = yield puzzleAttempt_model_1.default.create({
             userId: userId,
             puzzleId: campaignId,

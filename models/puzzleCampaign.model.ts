@@ -14,6 +14,7 @@ export interface IPuzzleCampaign extends Document {
   description: string;
   brandUrl?: string; // brand's website or social media URL
   campaignUrl?: string; // specific URL for this campaign
+  videoUrl?: string; // optional promotional video URL
   puzzleImageUrl: string;
   originalImageUrl: string;
   questions: IQuestion[];
@@ -25,7 +26,8 @@ export interface IPuzzleCampaign extends Document {
   analytics: any;
   // Payment/Budget tracking
   packageType?: "basic" | "premium";
-  totalBudget?: number; // Total amount paid for campaign
+  totalBudget?: number; // Total amount allocated for campaign
+  expectedChargeAmount?: number; // discounted amount brand will pay (if any)
   dailyAllocation?: number; // Fixed daily rate (₦1,000 or ₦1,428.57)
   budgetUsed?: number; // Amount already allocated to daily pools
   budgetRemaining?: number; // Amount left to allocate
@@ -47,6 +49,7 @@ const puzzleCampaignSchema: Schema<IPuzzleCampaign> = new mongoose.Schema(
     description: { type: String, required: true },
     brandUrl: { type: String, required: false },
     campaignUrl: { type: String, required: false },
+    videoUrl: { type: String, required: false },
     puzzleImageUrl: { type: String, required: true },
     originalImageUrl: { type: String, required: true },
     questions: [
@@ -69,11 +72,18 @@ const puzzleCampaignSchema: Schema<IPuzzleCampaign> = new mongoose.Schema(
     analytics: { type: Schema.Types.Mixed, default: {} },
     // Payment/Budget tracking
     packageType: { type: String, enum: ["basic", "premium"] },
+    // Total amount allocated for campaign (full credit to brand)
     totalBudget: { type: Number, default: 0 },
+    // expectedChargeAmount: discounted amount brand will pay (stored for payment initialization)
+    expectedChargeAmount: { type: Number, default: 0 },
     dailyAllocation: { type: Number, default: 0 },
     budgetUsed: { type: Number, default: 0 },
     budgetRemaining: { type: Number, default: 0 },
-    paymentStatus: { type: String, enum: ["unpaid", "paid", "partial"], default: "unpaid" },
+    paymentStatus: {
+      type: String,
+      enum: ["unpaid", "paid", "partial"],
+      default: "unpaid",
+    },
     transactionId: { type: String },
   },
   { timestamps: true }

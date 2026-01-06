@@ -47,6 +47,7 @@ const puzzleCampaignSchema = new mongoose_1.default.Schema({
     description: { type: String, required: true },
     brandUrl: { type: String, required: false },
     campaignUrl: { type: String, required: false },
+    videoUrl: { type: String, required: false },
     puzzleImageUrl: { type: String, required: true },
     originalImageUrl: { type: String, required: true },
     questions: [
@@ -69,11 +70,18 @@ const puzzleCampaignSchema = new mongoose_1.default.Schema({
     analytics: { type: mongoose_1.Schema.Types.Mixed, default: {} },
     // Payment/Budget tracking
     packageType: { type: String, enum: ["basic", "premium"] },
+    // Total amount allocated for campaign (full credit to brand)
     totalBudget: { type: Number, default: 0 },
+    // expectedChargeAmount: discounted amount brand will pay (stored for payment initialization)
+    expectedChargeAmount: { type: Number, default: 0 },
     dailyAllocation: { type: Number, default: 0 },
     budgetUsed: { type: Number, default: 0 },
     budgetRemaining: { type: Number, default: 0 },
-    paymentStatus: { type: String, enum: ["unpaid", "paid", "partial"], default: "unpaid" },
+    paymentStatus: {
+        type: String,
+        enum: ["unpaid", "paid", "partial"],
+        default: "unpaid",
+    },
     transactionId: { type: String },
 }, { timestamps: true });
 // index for quick analytics by brand

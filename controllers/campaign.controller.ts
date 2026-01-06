@@ -44,7 +44,7 @@ export const getActiveCampaigns = CatchAsyncError(
 
       const campaigns = await PuzzleCampaignModel.find(filter)
         .select(
-          "_id brandId packageId gameType title description brandUrl campaignUrl puzzleImageUrl originalImageUrl timeLimit questions words status paymentStatus packageType totalBudget dailyAllocation budgetRemaining budgetUsed transactionId startDate endDate createdAt"
+          "_id brandId packageId gameType title description brandUrl campaignUrl videoUrl puzzleImageUrl originalImageUrl timeLimit questions words status paymentStatus packageType totalBudget dailyAllocation budgetRemaining budgetUsed transactionId startDate endDate createdAt"
         )
         .lean();
 
@@ -68,6 +68,7 @@ export const getActiveCampaigns = CatchAsyncError(
             description: campaign.description,
             brandUrl: campaign.brandUrl,
             campaignUrl: campaign.campaignUrl,
+            videoUrl: (campaign as any).videoUrl || null,
             puzzleImageUrl: campaign.puzzleImageUrl,
             originalImageUrl: campaign.originalImageUrl,
             timeLimit: campaign.timeLimit,
@@ -138,7 +139,7 @@ export const getAllCampaigns = CatchAsyncError(
 
       const campaigns = await PuzzleCampaignModel.find(filter)
         .select(
-          "_id brandId packageId gameType title description brandUrl campaignUrl puzzleImageUrl originalImageUrl timeLimit questions words status paymentStatus packageType totalBudget dailyAllocation budgetRemaining budgetUsed transactionId startDate endDate createdAt"
+          "_id brandId packageId gameType title description brandUrl campaignUrl videoUrl puzzleImageUrl originalImageUrl timeLimit questions words status paymentStatus packageType totalBudget dailyAllocation budgetRemaining budgetUsed transactionId startDate endDate createdAt"
         )
         .lean();
 
@@ -162,6 +163,7 @@ export const getAllCampaigns = CatchAsyncError(
             description: campaign.description,
             brandUrl: campaign.brandUrl,
             campaignUrl: campaign.campaignUrl,
+            videoUrl: (campaign as any).videoUrl || null,
             puzzleImageUrl: campaign.puzzleImageUrl,
             originalImageUrl: campaign.originalImageUrl,
             timeLimit: campaign.timeLimit,
@@ -202,7 +204,7 @@ export const getCampaignsByBrand = CatchAsyncError(
 
       const campaigns = await PuzzleCampaignModel.find({ brandId })
         .select(
-          "_id brandId packageId gameType title description brandUrl campaignUrl puzzleImageUrl originalImageUrl timeLimit questions words status paymentStatus packageType totalBudget dailyAllocation budgetRemaining budgetUsed transactionId startDate endDate createdAt"
+          "_id brandId packageId gameType title description brandUrl campaignUrl videoUrl puzzleImageUrl originalImageUrl timeLimit questions words status paymentStatus packageType totalBudget dailyAllocation budgetRemaining budgetUsed transactionId startDate endDate createdAt"
         )
         .lean();
 
@@ -233,6 +235,7 @@ export const getCampaignsByBrand = CatchAsyncError(
             description: campaign.description,
             brandUrl: campaign.brandUrl,
             campaignUrl: campaign.campaignUrl,
+            videoUrl: (campaign as any).videoUrl || null,
             puzzleImageUrl: campaign.puzzleImageUrl,
             originalImageUrl: campaign.originalImageUrl,
             timeLimit: campaign.timeLimit,
@@ -301,6 +304,7 @@ export const getCampaignById = CatchAsyncError(
           description: campaign.description,
           brandUrl: campaign.brandUrl,
           campaignUrl: campaign.campaignUrl,
+          videoUrl: (campaign as any).videoUrl || null,
           puzzleImageUrl: campaign.puzzleImageUrl,
           originalImageUrl: campaign.originalImageUrl,
           questions: campaign.questions.map((q: any) => ({
@@ -422,22 +426,40 @@ export const submitCampaign = CatchAsyncError(
       );
       console.log(`Solved: ${body.solved}`);
 
-      // determine if first-time solved
+      // determine if first-time ever solved (used for unique puzzle counts)
       let firstTime = false;
       if (body.solved && allQuestionsCorrect) {
-        const prev = await PuzzleAttemptModel.findOne({
+        const prevEver = await PuzzleAttemptModel.findOne({
           userId: userId,
           campaignId: campaignId,
           solved: true,
         });
-        console.log(`Previous attempt found: ${!!prev}`);
-        if (!prev) firstTime = true;
+        console.log(`Previous successful attempt ever found: ${!!prevEver}`);
+        if (!prevEver) firstTime = true;
       }
 
-      // Calculate points using weighted scoring formula
+      // Allow users to earn points up to 2 times per DAY for the same campaign.
+      // Count today's successful attempts for this user+campaign.
+      const now = new Date();
+      const startOfDay = new Date(now);
+      startOfDay.setHours(0, 0, 0, 0);
+      const endOfDay = new Date(now);
+      endOfDay.setHours(23, 59, 59, 999);
+
+      const todaysSuccessCount = await PuzzleAttemptModel.countDocuments({
+        userId: userId,
+        campaignId: campaignId,
+        solved: true,
+        timestamp: { $gte: startOfDay, $lte: endOfDay },
+      });
+
+      const canEarnPointsNow =
+        body.solved && allQuestionsCorrect && todaysSuccessCount < 2;
+
+      // Calculate points using weighted scoring formula only if eligible
       let pointsEarned = 0;
 
-      if (firstTime && allQuestionsCorrect) {
+      if (canEarnPointsNow) {
         // Configuration parameters
         const basePoints = 10;
         const optimalTime = 60; // seconds
@@ -502,7 +524,9 @@ export const submitCampaign = CatchAsyncError(
         });
       }
 
-      console.log(`First Time: ${firstTime}, Points Earned: ${pointsEarned}`);
+      console.log(
+        `First Time: ${firstTime}, Today's successes: ${todaysSuccessCount}, Points Earned: ${pointsEarned}`
+      );
 
       const attempt = await PuzzleAttemptModel.create({
         userId: userId,

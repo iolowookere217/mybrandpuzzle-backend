@@ -54,7 +54,9 @@ const calculateDailyPrizeTable = () => __awaiter(void 0, void 0, void 0, functio
         // Calculate total daily pool from all active campaigns
         for (const campaign of activeCampaigns) {
             const packageType = campaign.packageType;
-            const dailyAllocation = DAILY_RATES[packageType];
+            // Prefer stored campaign.dailyAllocation (set at payment) else fallback to legacy DAILY_RATES
+            const dailyAllocation = (campaign.dailyAllocation && Number(campaign.dailyAllocation)) ||
+                DAILY_RATES[packageType];
             totalDailyPool += dailyAllocation;
             campaignBreakdown.push({
                 campaignId: String(campaign._id),
@@ -63,16 +65,16 @@ const calculateDailyPrizeTable = () => __awaiter(void 0, void 0, void 0, functio
             });
         }
         // Calculate 70-30 split
-        const gamerShare = totalDailyPool * 0.70;
-        const platformFee = totalDailyPool * 0.30;
+        const gamerShare = totalDailyPool * 0.7;
+        const platformFee = totalDailyPool * 0.3;
         // Calculate prize distribution for each position
         const prizeTable = PRIZE_DISTRIBUTION.map((item) => ({
             position: item.position,
             percentage: item.percentage,
-            amount: Math.round((gamerShare * item.percentage) / 100 * 100) / 100, // Round to 2 decimals
+            amount: Math.round(((gamerShare * item.percentage) / 100) * 100) / 100, // Round to 2 decimals
         }));
         return {
-            date: today.toISOString().split('T')[0],
+            date: today.toISOString().split("T")[0],
             activeCampaignsCount: activeCampaigns.length,
             totalDailyPool,
             gamerShare,
@@ -113,12 +115,12 @@ const getPrizeTableForDate = (date) => __awaiter(void 0, void 0, void 0, functio
                 dailyAllocation,
             });
         }
-        const gamerShare = totalDailyPool * 0.70;
-        const platformFee = totalDailyPool * 0.30;
+        const gamerShare = totalDailyPool * 0.7;
+        const platformFee = totalDailyPool * 0.3;
         const prizeTable = PRIZE_DISTRIBUTION.map((item) => ({
             position: item.position,
             percentage: item.percentage,
-            amount: Math.round((gamerShare * item.percentage) / 100 * 100) / 100,
+            amount: Math.round(((gamerShare * item.percentage) / 100) * 100) / 100,
         }));
         return {
             date,

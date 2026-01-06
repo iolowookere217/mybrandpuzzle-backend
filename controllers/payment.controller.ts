@@ -65,8 +65,10 @@ export const initializePayment = CatchAsyncError(
         );
       }
 
-      // Use the pre-calculated totalBudget from campaign
+      // Use the pre-calculated expectedChargeAmount (discounted) if available,
+      // otherwise fallback to campaign.totalBudget or package base price
       const amount =
+        campaign.expectedChargeAmount ||
         campaign.totalBudget ||
         PACKAGE_PRICES[campaign.packageType as "basic" | "premium"] ||
         0;
@@ -201,10 +203,15 @@ export const verifyPayment = CatchAsyncError(
             now.getTime() + timeLimitInHours * 60 * 60 * 1000
           );
 
+          // Use the charged amount as the campaign's allocated budget
+          const allocatedBudget = transaction.amount || 0;
+          const days = Math.max(1, Math.ceil((campaign.timeLimit || 168) / 24));
+          const dailyAllocation = Number((allocatedBudget / days).toFixed(2));
+
           campaign.packageType = packageType;
-          campaign.totalBudget = transaction.amount;
-          campaign.dailyAllocation = DAILY_RATES[packageType];
-          campaign.budgetRemaining = transaction.amount;
+          campaign.totalBudget = allocatedBudget; // allocated budget = amount paid
+          campaign.dailyAllocation = dailyAllocation;
+          campaign.budgetRemaining = allocatedBudget;
           campaign.budgetUsed = 0;
           campaign.paymentStatus = "paid";
           campaign.transactionId = String(transaction._id);
@@ -280,10 +287,18 @@ export const paystackWebhook = CatchAsyncError(
               now.getTime() + timeLimitInHours * 60 * 60 * 1000
             );
 
+            // Use the charged amount as the campaign's allocated budget
+            const allocatedBudget = transaction.amount || 0;
+            const days = Math.max(
+              1,
+              Math.ceil((campaign.timeLimit || 168) / 24)
+            );
+            const dailyAllocation = Number((allocatedBudget / days).toFixed(2));
+
             campaign.packageType = packageType;
-            campaign.totalBudget = transaction.amount;
-            campaign.dailyAllocation = DAILY_RATES[packageType];
-            campaign.budgetRemaining = transaction.amount;
+            campaign.totalBudget = allocatedBudget; // allocated budget = amount paid
+            campaign.dailyAllocation = dailyAllocation;
+            campaign.budgetRemaining = allocatedBudget;
             campaign.budgetUsed = 0;
             campaign.paymentStatus = "paid";
             campaign.transactionId = String(transaction._id);

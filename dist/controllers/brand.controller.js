@@ -26,19 +26,22 @@ const PACKAGE_PRICES = {
     basic: 7000, // ₦7,000
     premium: 10000, // ₦10,000
 };
-// Calculate duration factor based on timeLimit (in hours)
+// Convert hours to number of weeks (rounded up to cover partial weeks)
+const getWeeksFromHours = (timeLimitHours) => {
+    const hoursPerWeek = 24 * 7; // 168
+    if (!timeLimitHours || timeLimitHours <= 0)
+        return 1;
+    return Math.max(1, Math.ceil(timeLimitHours / hoursPerWeek));
+};
+// Multiplier formula provided: Multiplier = 0.9 * n + 10^{-n}
+// Return the multiplier rounded DOWN to one decimal place to normalize to 10% discount
 const calculateDurationFactor = (timeLimitHours) => {
-    if (timeLimitHours === 168)
-        return 1; // 1 week
-    if (timeLimitHours === 336)
-        return 1.8; // 2 weeks
-    if (timeLimitHours === 504)
-        return 2.7; // 3 weeks
-    if (timeLimitHours === 672)
-        return 3.6; // 4 weeks
-    // For other durations, interpolate or use closest match
-    // Default: 1 (weekly rate)
-    return 1;
+    const weeks = getWeeksFromHours(timeLimitHours);
+    if (weeks === 1)
+        return 1.0;
+    const multiplierRaw = 0.9 * weeks + Math.pow(10, -weeks);
+    const multiplierRoundedDown = Math.floor(multiplierRaw * 10) / 10; // e.g. 1.81 -> 1.8
+    return multiplierRoundedDown;
 };
 // Create a puzzle campaign (brands only). Expects multipart upload with one file: "image" (used for both scrambled and original)
 exports.createCampaign = (0, catchAsyncError_1.CatchAsyncError)((req, res, next) => __awaiter(void 0, void 0, void 0, function* () {
@@ -47,7 +50,7 @@ exports.createCampaign = (0, catchAsyncError_1.CatchAsyncError)((req, res, next)
         const brandUser = req.user;
         if (brandUser.role !== "brand")
             return next(new ErrorHandler_1.default("Only brands can create campaigns", 403));
-        const { questions, title, description, gameType, words, packageId, brandUrl, campaignUrl, timeLimit, } = req.body;
+        const { questions, title, description, gameType, words, packageId, brandUrl, campaignUrl, videoUrl, timeLimit, } = req.body;
         // Validate packageId
         if (!packageId || typeof packageId !== "string") {
             return next(new ErrorHandler_1.default("packageId is required and must be a valid string", 400));
@@ -210,8 +213,16 @@ exports.createCampaign = (0, catchAsyncError_1.CatchAsyncError)((req, res, next)
         // Get package type and calculate totalBudget
         const packageType = ((_d = packageData.name) === null || _d === void 0 ? void 0 : _d.toLowerCase()) === "premium" ? "premium" : "basic";
         const basePrice = PACKAGE_PRICES[packageType];
-        const durationFactor = calculateDurationFactor(parsedTimeLimit);
-        const totalBudget = Math.round(basePrice * durationFactor);
+        // Weeks selected by brand (rounded up)
+        const weeks = getWeeksFromHours(parsedTimeLimit);
+        // Full allocated budget that the brand should receive (no discount)
+        const allocatedBudget = basePrice * weeks; // e.g., 2 weeks => 7000 * 2 = 14000
+        // Compute charged multiplier (rounded DOWN to 1 decimal as requested)
+        const chargedMultiplier = calculateDurationFactor(parsedTimeLimit); // e.g., 1.8 for 2 weeks
+        const chargedAmount = Math.round(basePrice * chargedMultiplier); // amount brand will pay
+        // Compute daily allocation spread across the selected duration (days) using allocated budget
+        const days = Math.max(1, Math.ceil(parsedTimeLimit / 24));
+        const dailyAllocation = Number((allocatedBudget / days).toFixed(2));
         // Set placeholder dates - actual dates will be set when payment is made
         const currentDate = new Date();
         const placeholderEndDate = new Date(currentDate.getTime() + parsedTimeLimit * 60 * 60 * 1000);
@@ -226,14 +237,19 @@ exports.createCampaign = (0, catchAsyncError_1.CatchAsyncError)((req, res, next)
             description: description.trim(),
             brandUrl: (brandUrl === null || brandUrl === void 0 ? void 0 : brandUrl.trim()) || null,
             campaignUrl: (campaignUrl === null || campaignUrl === void 0 ? void 0 : campaignUrl.trim()) || null,
+            videoUrl: (videoUrl === null || videoUrl === void 0 ? void 0 : videoUrl.trim()) || null,
             puzzleImageUrl: puzzleUrl,
             originalImageUrl: originalUrl,
             questions: parsedQuestions,
             timeLimit: parsedTimeLimit,
             status: "draft", // Always start as draft
             paymentStatus: "unpaid", // All new campaigns start as unpaid
-            totalBudget: totalBudget,
-            budgetRemaining: totalBudget,
+            // Payment not yet completed: store expected charged amount; actual
+            // `totalBudget` (allocated) will be set after payment (to the paid amount).
+            totalBudget: 0,
+            expectedChargeAmount: chargedAmount,
+            dailyAllocation: 0,
+            budgetRemaining: 0,
             budgetUsed: 0,
             startDate: currentDate, // Placeholder - will be updated on payment
             endDate: placeholderEndDate, // Placeholder - will be updated on payment
