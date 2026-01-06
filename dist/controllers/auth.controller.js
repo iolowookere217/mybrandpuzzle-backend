@@ -31,7 +31,7 @@ const userHelpers_1 = require("../utils/userHelpers");
 exports.googleAuth = (0, catchAsyncError_1.CatchAsyncError)((req, res, next) => __awaiter(void 0, void 0, void 0, function* () {
     try {
         // Accept either a firebase idToken or a minimal profile payload
-        const { idToken, email, name, avatar, googleId } = req.body;
+        const { idToken, email, name, avatar, googleId, givenName, familyName } = req.body;
         let profile = null;
         if (idToken) {
             // verify with firebase-admin
@@ -51,10 +51,15 @@ exports.googleAuth = (0, catchAsyncError_1.CatchAsyncError)((req, res, next) => 
         }
         let user = yield user_model_1.default.findOne({ email: profile.email });
         if (!user) {
-            const fullName = profile.name || profile.email.split("@")[0];
-            const nameParts = fullName.split(" ");
-            const firstName = nameParts[0] || fullName;
-            const lastName = nameParts.slice(1).join(" ") || "";
+            // Prefer explicit givenName/familyName if provided by client
+            let firstName = givenName || "";
+            let lastName = familyName || "";
+            if (!firstName) {
+                const fullName = profile.name || profile.email.split("@")[0];
+                const nameParts = fullName.split(" ");
+                firstName = nameParts[0] || fullName;
+                lastName = nameParts.slice(1).join(" ") || "";
+            }
             const username = yield (0, userHelpers_1.generateUsername)(profile.email);
             const avatar = profile.picture || (0, userHelpers_1.generateAvatar)(`${firstName} ${lastName}`.trim() || profile.email);
             user = yield user_model_1.default.create({

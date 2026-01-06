@@ -20,7 +20,7 @@ export const googleAuth = CatchAsyncError(
   async (req: Request, res: Response, next: NextFunction) => {
     try {
       // Accept either a firebase idToken or a minimal profile payload
-      const { idToken, email, name, avatar, googleId } = req.body;
+      const { idToken, email, name, avatar, googleId, givenName, familyName } = req.body;
 
       let profile: {
         email: string;
@@ -46,10 +46,16 @@ export const googleAuth = CatchAsyncError(
 
       let user = await UserModel.findOne({ email: profile.email });
       if (!user) {
-        const fullName = profile.name || profile.email.split("@")[0];
-        const nameParts = fullName.split(" ");
-        const firstName = nameParts[0] || fullName;
-        const lastName = nameParts.slice(1).join(" ") || "";
+        // Prefer explicit givenName/familyName if provided by client
+        let firstName = givenName || "";
+        let lastName = familyName || "";
+
+        if (!firstName) {
+          const fullName = profile.name || profile.email.split("@")[0];
+          const nameParts = fullName.split(" ");
+          firstName = nameParts[0] || fullName;
+          lastName = nameParts.slice(1).join(" ") || "";
+        }
 
         const username = await generateUsername(profile.email);
         const avatar = profile.picture || generateAvatar(`${firstName} ${lastName}`.trim() || profile.email);
