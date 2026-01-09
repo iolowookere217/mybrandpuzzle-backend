@@ -348,7 +348,7 @@ exports.submitCampaign = (0, catchAsyncError_1.CatchAsyncError)((req, res, next)
             if (!prevEver)
                 firstTime = true;
         }
-        // Allow users to earn points up to 2 times per DAY for the same campaign.
+        // Allow users to earn points only 1 time per DAY for the same campaign.
         // Count today's successful attempts for this user+campaign.
         const now = new Date();
         const startOfDay = new Date(now);
@@ -361,7 +361,7 @@ exports.submitCampaign = (0, catchAsyncError_1.CatchAsyncError)((req, res, next)
             solved: true,
             timestamp: { $gte: startOfDay, $lte: endOfDay },
         });
-        const canEarnPointsNow = body.solved && allQuestionsCorrect && todaysSuccessCount < 2;
+        const canEarnPointsNow = body.solved && allQuestionsCorrect && todaysSuccessCount < 1;
         // Calculate points using weighted scoring formula only if eligible
         let pointsEarned = 0;
         if (canEarnPointsNow) {
