@@ -25,8 +25,9 @@ const sendMail = async (options: EmailOptions): Promise<void> => {
 
   const { email, subject, template, data } = options;
 
-  // get the pdath to the email template file
-  const templatePath = path.join(__dirname, "../mails", template);
+  // get the path to the email template file
+  // Use process.cwd() to get project root, which works in both dev and production
+  const templatePath = path.join(process.cwd(), "mails", template);
 
   // Render the email template with EJS
   const html: string = await ejs.renderFile(templatePath, data);

@@ -124,7 +124,7 @@ export const registerGamer = CatchAsyncError(
       // Try to send email first
       try {
         await ejs.renderFile(
-          path.join(__dirname, "../mails/activation-mail.ejs"),
+          path.join(process.cwd(), "mails/activation-mail.ejs"),
           data
         );
         await sendMail({
@@ -282,7 +282,7 @@ export const registerBrand = CatchAsyncError(
       // Try to send email first
       try {
         await ejs.renderFile(
-          path.join(__dirname, "../mails/activation-mail.ejs"),
+          path.join(process.cwd(), "mails/activation-mail.ejs"),
           data
         );
         await sendMail({

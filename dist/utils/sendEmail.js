@@ -27,8 +27,9 @@ const sendMail = (options) => __awaiter(void 0, void 0, void 0, function* () {
         },
     });
     const { email, subject, template, data } = options;
-    // get the pdath to the email template file
-    const templatePath = path_1.default.join(__dirname, "../mails", template);
+    // get the path to the email template file
+    // Use process.cwd() to get project root, which works in both dev and production
+    const templatePath = path_1.default.join(process.cwd(), "mails", template);
     // Render the email template with EJS
     const html = yield ejs_1.default.renderFile(templatePath, data);
     const mailOptions = {

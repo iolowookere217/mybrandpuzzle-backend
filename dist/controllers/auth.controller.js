@@ -114,7 +114,7 @@ exports.registerGamer = (0, catchAsyncError_1.CatchAsyncError)((req, res, next) 
         const data = { user: { name: firstName }, activationCode };
         // Try to send email first
         try {
-            yield ejs_1.default.renderFile(path_1.default.join(__dirname, "../mails/activation-mail.ejs"), data);
+            yield ejs_1.default.renderFile(path_1.default.join(process.cwd(), "mails/activation-mail.ejs"), data);
             yield (0, sendEmail_1.default)({
                 email,
                 subject: "Verify your gamer account",
@@ -237,7 +237,7 @@ exports.registerBrand = (0, catchAsyncError_1.CatchAsyncError)((req, res, next) 
         const data = { user: { name }, activationCode };
         // Try to send email first
         try {
-            yield ejs_1.default.renderFile(path_1.default.join(__dirname, "../mails/activation-mail.ejs"), data);
+            yield ejs_1.default.renderFile(path_1.default.join(process.cwd(), "mails/activation-mail.ejs"), data);
             yield (0, sendEmail_1.default)({
                 email,
                 subject: "Activate your brand account",
