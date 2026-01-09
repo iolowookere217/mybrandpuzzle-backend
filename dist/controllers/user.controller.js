@@ -43,7 +43,7 @@ exports.registerUser = (0, catchAsyncError_1.CatchAsyncError)((req, res, next) =
         const activationToken = (0, exports.createActivationToken)(user);
         const activationCode = activationToken.activationCode;
         const data = { user: { name: user.name }, activationCode };
-        yield ejs_1.default.renderFile(path_1.default.join(process.cwd(), "mails/activation-mail.ejs"), data);
+        yield ejs_1.default.renderFile(path_1.default.join(__dirname, "../mails/activation-mail.ejs"), data);
         //send email to user
         try {
             yield (0, sendEmail_1.default)({

@@ -28,8 +28,10 @@ const sendMail = (options) => __awaiter(void 0, void 0, void 0, function* () {
     });
     const { email, subject, template, data } = options;
     // get the path to the email template file
-    // Use process.cwd() to get project root, which works in both dev and production
-    const templatePath = path_1.default.join(process.cwd(), "mails", template);
+    // In production (compiled to dist), mails folder is copied to dist/mails
+    // __dirname in compiled JS will be <root>/dist/utils, so ../mails points to <root>/dist/mails
+    // In development with ts-node-dev, __dirname is <root>/utils, so ../mails points to <root>/mails
+    const templatePath = path_1.default.join(__dirname, "../mails", template);
     // Render the email template with EJS
     const html = yield ejs_1.default.renderFile(templatePath, data);
     const mailOptions = {
