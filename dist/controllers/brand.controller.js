@@ -289,10 +289,29 @@ exports.getCampaignAnalytics = (0, catchAsyncError_1.CatchAsyncError)((req, res,
             brandId: brandUser._id,
         }).lean();
         const campaignsAnalytics = [];
+        // prepare campaign ids for bulk queries
+        const campaignIds = campaigns.map((c) => String(c._id));
+        // Fetch all attempts for brand campaigns in one query
+        const allAttempts = yield puzzleAttempt_model_1.default.find({
+            campaignId: { $in: campaignIds },
+        }).lean();
+        // Aggregated metrics
+        const totalCampaigns = campaigns.length;
+        const activeCampaigns = campaigns.filter((c) => c.status === "active").length;
+        const totalBudgetUsed = campaigns.reduce((s, c) => s + (Number(c.budgetUsed) || 0), 0);
+        // total games played across brand
+        const totalGamesPlayed = allAttempts.length;
+        // unique players across all brand campaigns
+        const uniquePlayerIds = Array.from(new Set(allAttempts.map((a) => String(a.userId))));
+        const uniquePlayers = uniquePlayerIds.filter((id) => id && id !== "undefined").length;
+        // average gameplay time (in ms) across all attempts
+        const avgPlayTime = allAttempts.length
+            ? Math.round(allAttempts.reduce((s, a) => s + (a.timeTaken || 0), 0) /
+                allAttempts.length)
+            : 0;
+        // per-campaign analytics
         for (const c of campaigns) {
-            const attempts = yield puzzleAttempt_model_1.default.find({
-                campaignId: c._id.toString(),
-            }).lean();
+            const attempts = allAttempts.filter((a) => String(a.campaignId) === String(c._id));
             const plays = attempts.length;
             const completions = attempts.filter((a) => a.solved).length;
             const avgCompletionTime = attempts.filter((a) => a.solved).length
@@ -302,10 +321,10 @@ exports.getCampaignAnalytics = (0, catchAsyncError_1.CatchAsyncError)((req, res,
                     attempts.filter((a) => a.solved).length)
                 : 0;
             // question correctness rates
-            const qCorrectCounts = c.questions.map(() => 0);
+            const qCorrectCounts = (c.questions || []).map(() => 0);
             for (const a of attempts) {
                 if (Array.isArray(a.answers)) {
-                    for (let i = 0; i < a.answers.length && i < c.questions.length; i++) {
+                    for (let i = 0; i < a.answers.length && i < (c.questions || []).length; i++) {
                         if (a.answers[i] === c.questions[i].correctIndex)
                             qCorrectCounts[i]++;
                     }
@@ -321,7 +340,18 @@ exports.getCampaignAnalytics = (0, catchAsyncError_1.CatchAsyncError)((req, res,
                 questionCorrectnessRates: qRates,
             });
         }
-        res.status(200).json({ success: true, campaigns: campaignsAnalytics });
+        res.status(200).json({
+            success: true,
+            analytics: {
+                totalCampaigns,
+                activeCampaigns,
+                totalBudgetUsed,
+                totalGamesPlayed,
+                uniquePlayers,
+                avgPlayTime,
+                campaigns: campaignsAnalytics,
+            },
+        });
     }
     catch (error) {
         return next(new ErrorHandler_1.default(`Failed to fetch campaign analytics: ${error.message}`, 500));

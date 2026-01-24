@@ -12,13 +12,14 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.submitCampaign = exports.checkCampaignCompletion = exports.getCampaignById = exports.getCampaignsByBrand = exports.getAllCampaigns = exports.getActiveCampaigns = void 0;
+exports.deleteCampaign = exports.updateCampaign = exports.submitCampaign = exports.checkCampaignCompletion = exports.getCampaignById = exports.getCampaignsByBrand = exports.getAllCampaigns = exports.getActiveCampaigns = void 0;
 const catchAsyncError_1 = require("../middlewares/catchAsyncError");
 const ErrorHandler_1 = __importDefault(require("../utils/ErrorHandler"));
 const puzzleCampaign_model_1 = __importDefault(require("../models/puzzleCampaign.model"));
 const puzzleAttempt_model_1 = __importDefault(require("../models/puzzleAttempt.model"));
 const user_model_1 = __importDefault(require("../models/user.model"));
 const package_model_1 = __importDefault(require("../models/package.model"));
+const brand_model_1 = __importDefault(require("../models/brand.model"));
 // Helper function to check and update expired campaigns
 const updateExpiredCampaigns = () => __awaiter(void 0, void 0, void 0, function* () {
     const now = new Date();
@@ -464,5 +465,75 @@ exports.submitCampaign = (0, catchAsyncError_1.CatchAsyncError)((req, res, next)
     }
     catch (error) {
         return next(new ErrorHandler_1.default(`Failed to submit campaign result: ${error.message}`, 500));
+    }
+}));
+// Update a campaign (brands can edit their own campaigns)
+exports.updateCampaign = (0, catchAsyncError_1.CatchAsyncError)((req, res, next) => __awaiter(void 0, void 0, void 0, function* () {
+    try {
+        const { campaignId } = req.params;
+        const user = req.user;
+        if (!user)
+            return next(new ErrorHandler_1.default("User not authenticated", 401));
+        const campaign = yield puzzleCampaign_model_1.default.findById(campaignId);
+        if (!campaign)
+            return next(new ErrorHandler_1.default("Campaign not found", 404));
+        // Only the owning brand or admins can update
+        if (user.role === "brand" &&
+            String(campaign.brandId) !== String(user._id)) {
+            return next(new ErrorHandler_1.default("Not authorized to edit this campaign", 403));
+        }
+        // Allowed update fields
+        const updatable = [
+            "title",
+            "description",
+            "timeLimit",
+            "startDate",
+            "endDate",
+            "status",
+            "paymentStatus",
+            "totalBudget",
+            "dailyAllocation",
+            "budgetRemaining",
+            "budgetUsed",
+            "brandUrl",
+            "campaignUrl",
+            "videoUrl",
+            "questions",
+            "words",
+        ];
+        const updates = {};
+        for (const key of updatable) {
+            if (req.body[key] !== undefined)
+                updates[key] = req.body[key];
+        }
+        const updated = yield puzzleCampaign_model_1.default.findByIdAndUpdate(campaignId, { $set: updates }, { new: true }).lean();
+        res.status(200).json({ success: true, campaign: updated });
+    }
+    catch (error) {
+        return next(new ErrorHandler_1.default(`Failed to update campaign: ${error.message}`, 500));
+    }
+}));
+// Delete a campaign (brands can delete their own campaigns)
+exports.deleteCampaign = (0, catchAsyncError_1.CatchAsyncError)((req, res, next) => __awaiter(void 0, void 0, void 0, function* () {
+    try {
+        const { campaignId } = req.params;
+        const user = req.user;
+        if (!user)
+            return next(new ErrorHandler_1.default("User not authenticated", 401));
+        const campaign = yield puzzleCampaign_model_1.default.findById(campaignId);
+        if (!campaign)
+            return next(new ErrorHandler_1.default("Campaign not found", 404));
+        // Only the owning brand or admins can delete
+        if (user.role === "brand" &&
+            String(campaign.brandId) !== String(user._id)) {
+            return next(new ErrorHandler_1.default("Not authorized to delete this campaign", 403));
+        }
+        yield puzzleCampaign_model_1.default.findByIdAndDelete(campaignId);
+        // remove reference from BrandModel if present
+        yield brand_model_1.default.findOneAndUpdate({ userId: campaign.brandId }, { $pull: { campaigns: campaign._id } });
+        res.status(200).json({ success: true, message: "Campaign deleted" });
+    }
+    catch (error) {
+        return next(new ErrorHandler_1.default(`Failed to delete campaign: ${error.message}`, 500));
     }
 }));

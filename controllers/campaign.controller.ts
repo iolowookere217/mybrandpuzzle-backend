@@ -5,6 +5,7 @@ import PuzzleCampaignModel from "../models/puzzleCampaign.model";
 import PuzzleAttemptModel from "../models/puzzleAttempt.model";
 import UserModel from "../models/user.model";
 import PackageModel from "../models/package.model";
+import BrandModel from "../models/brand.model";
 
 // Helper function to check and update expired campaigns
 const updateExpiredCampaigns = async () => {
@@ -588,6 +589,107 @@ export const submitCampaign = CatchAsyncError(
           `Failed to submit campaign result: ${error.message}`,
           500
         )
+      );
+    }
+  }
+);
+
+// Update a campaign (brands can edit their own campaigns)
+export const updateCampaign = CatchAsyncError(
+  async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const { campaignId } = req.params;
+      const user = req.user as any;
+
+      if (!user) return next(new ErrorHandler("User not authenticated", 401));
+
+      const campaign = await PuzzleCampaignModel.findById(campaignId);
+      if (!campaign) return next(new ErrorHandler("Campaign not found", 404));
+
+      // Only the owning brand or admins can update
+      if (
+        user.role === "brand" &&
+        String(campaign.brandId) !== String(user._id)
+      ) {
+        return next(
+          new ErrorHandler("Not authorized to edit this campaign", 403)
+        );
+      }
+
+      // Allowed update fields
+      const updatable = [
+        "title",
+        "description",
+        "timeLimit",
+        "startDate",
+        "endDate",
+        "status",
+        "paymentStatus",
+        "totalBudget",
+        "dailyAllocation",
+        "budgetRemaining",
+        "budgetUsed",
+        "brandUrl",
+        "campaignUrl",
+        "videoUrl",
+        "questions",
+        "words",
+      ];
+
+      const updates: any = {};
+      for (const key of updatable) {
+        if (req.body[key] !== undefined) updates[key] = req.body[key];
+      }
+
+      const updated = await PuzzleCampaignModel.findByIdAndUpdate(
+        campaignId,
+        { $set: updates },
+        { new: true }
+      ).lean();
+
+      res.status(200).json({ success: true, campaign: updated });
+    } catch (error: any) {
+      return next(
+        new ErrorHandler(`Failed to update campaign: ${error.message}`, 500)
+      );
+    }
+  }
+);
+
+// Delete a campaign (brands can delete their own campaigns)
+export const deleteCampaign = CatchAsyncError(
+  async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const { campaignId } = req.params;
+      const user = req.user as any;
+
+      if (!user) return next(new ErrorHandler("User not authenticated", 401));
+
+      const campaign = await PuzzleCampaignModel.findById(campaignId);
+      if (!campaign) return next(new ErrorHandler("Campaign not found", 404));
+
+      // Only the owning brand or admins can delete
+      if (
+        user.role === "brand" &&
+        String(campaign.brandId) !== String(user._id)
+      ) {
+        return next(
+          new ErrorHandler("Not authorized to delete this campaign", 403)
+        );
+      }
+
+      await PuzzleCampaignModel.findByIdAndDelete(campaignId);
+
+      // remove reference from BrandModel if present
+      await BrandModel.findOneAndUpdate(
+        { userId: campaign.brandId },
+        { $pull: { campaigns: campaign._id } }
+      );
+
+      res.status(200).json({ success: true, message: "Campaign deleted" });
+    } catch (error: any) {
+      return next(
+        new ErrorHandler(`Failed to delete campaign: ${error.message}`, 500)
       );
     }
   }
