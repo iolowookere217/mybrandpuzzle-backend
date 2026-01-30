@@ -13,6 +13,7 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
 };
 Object.defineProperty(exports, "__esModule", { value: true });
 const nodemailer_1 = __importDefault(require("nodemailer"));
+const mail_1 = __importDefault(require("@sendgrid/mail"));
 const ejs_1 = __importDefault(require("ejs"));
 const path_1 = __importDefault(require("path"));
 require("dotenv/config");
@@ -20,10 +21,33 @@ const sendMail = (options) => __awaiter(void 0, void 0, void 0, function* () {
     // Determine which email provider to use (default: gmail)
     // Set EMAIL_PROVIDER=twilio in your environment to use Twilio SendGrid
     // Set EMAIL_PROVIDER=gmail to use Gmail
-    const emailProvider = (process.env.EMAIL_PROVIDER || "gmail").toLowerCase();
+    let emailProvider = (process.env.EMAIL_PROVIDER || "gmail").toLowerCase();
+    // If Gmail SMTP credentials are present prefer Gmail for sending emails.
+    // This allows quickly falling back to the previously working Gmail setup
+    // while keeping the Twilio/SendGrid configuration available for later debugging.
+    if (process.env.SMTP_MAIL && process.env.SMTP_PASSWORD) {
+        emailProvider = "gmail";
+    }
     let transportConfig;
     if (emailProvider === "twilio" || emailProvider === "sendgrid") {
-        // Twilio SendGrid SMTP Configuration
+        // Prefer SendGrid Web API if API key is provided, otherwise fallback to SMTP
+        if (process.env.SENDGRID_API_KEY) {
+            mail_1.default.setApiKey(process.env.SENDGRID_API_KEY);
+            // Render template (below) then send via SendGrid API
+            const { email, subject, template, data } = options;
+            const templatePath = path_1.default.join(__dirname, "../mails", template);
+            const html = yield ejs_1.default.renderFile(templatePath, data);
+            const fromEmail = process.env.TWILIO_SMTP_FROM || process.env.SMTP_MAIL;
+            const msg = {
+                to: email,
+                from: fromEmail,
+                subject,
+                html,
+            };
+            yield mail_1.default.send(msg);
+            return;
+        }
+        // Twilio SendGrid SMTP Configuration (fallback)
         transportConfig = {
             host: process.env.TWILIO_SMTP_HOST || "smtp.sendgrid.net",
             port: parseInt(process.env.TWILIO_SMTP_PORT || "587"),

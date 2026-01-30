@@ -1,4 +1,5 @@
 import nodemailer, { Transporter } from "nodemailer";
+import sgMail from "@sendgrid/mail";
 import ejs from "ejs";
 import path from "path";
 
@@ -16,12 +17,37 @@ const sendMail = async (options: EmailOptions): Promise<void> => {
   // Determine which email provider to use (default: gmail)
   // Set EMAIL_PROVIDER=twilio in your environment to use Twilio SendGrid
   // Set EMAIL_PROVIDER=gmail to use Gmail
-  const emailProvider = (process.env.EMAIL_PROVIDER || "gmail").toLowerCase();
+  let emailProvider = (process.env.EMAIL_PROVIDER || "gmail").toLowerCase();
+
+  // If Gmail SMTP credentials are present prefer Gmail for sending emails.
+  // This allows quickly falling back to the previously working Gmail setup
+  // while keeping the Twilio/SendGrid configuration available for later debugging.
+  if (process.env.SMTP_MAIL && process.env.SMTP_PASSWORD) {
+    emailProvider = "gmail";
+  }
 
   let transportConfig: any;
 
   if (emailProvider === "twilio" || emailProvider === "sendgrid") {
-    // Twilio SendGrid SMTP Configuration
+    // Prefer SendGrid Web API if API key is provided, otherwise fallback to SMTP
+    if (process.env.SENDGRID_API_KEY) {
+      sgMail.setApiKey(process.env.SENDGRID_API_KEY);
+      // Render template (below) then send via SendGrid API
+      const { email, subject, template, data } = options;
+      const templatePath = path.join(__dirname, "../mails", template);
+      const html: string = await ejs.renderFile(templatePath, data);
+      const fromEmail = process.env.TWILIO_SMTP_FROM || process.env.SMTP_MAIL;
+      const msg: any = {
+        to: email,
+        from: fromEmail,
+        subject,
+        html,
+      };
+      await sgMail.send(msg);
+      return;
+    }
+
+    // Twilio SendGrid SMTP Configuration (fallback)
     transportConfig = {
       host: process.env.TWILIO_SMTP_HOST || "smtp.sendgrid.net",
       port: parseInt(process.env.TWILIO_SMTP_PORT || "587"),
@@ -72,9 +98,10 @@ const sendMail = async (options: EmailOptions): Promise<void> => {
   const html: string = await ejs.renderFile(templatePath, data);
 
   // Determine the sender email based on the provider
-  const fromEmail = emailProvider === "twilio" || emailProvider === "sendgrid"
-    ? process.env.TWILIO_SMTP_FROM || process.env.SMTP_MAIL
-    : process.env.SMTP_MAIL;
+  const fromEmail =
+    emailProvider === "twilio" || emailProvider === "sendgrid"
+      ? process.env.TWILIO_SMTP_FROM || process.env.SMTP_MAIL
+      : process.env.SMTP_MAIL;
 
   const mailOptions = {
     from: fromEmail,
