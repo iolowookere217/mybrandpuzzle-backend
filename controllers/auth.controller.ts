@@ -15,6 +15,25 @@ import sendMail from "../utils/sendEmail";
 import { createActivationToken } from "./user.controller";
 import { generateUsername, generateAvatar } from "../utils/userHelpers";
 
+// Interface for password reset token payload
+interface IResetTokenPayload {
+  userId: string;
+  resetCode: string;
+}
+
+// Create password reset token
+const createResetToken = (userId: string): { token: string; resetCode: string } => {
+  const resetCode = Math.floor(100000 + Math.random() * 900000).toString();
+
+  const token = jwt.sign(
+    { userId, resetCode } as IResetTokenPayload,
+    process.env.ACTIVATION_SECRET as Secret,
+    { expiresIn: "15m" }
+  );
+
+  return { token, resetCode };
+};
+
 // Google OAuth sign-in (client provides profile info or idToken)
 export const googleAuth = CatchAsyncError(
   async (req: Request, res: Response, next: NextFunction) => {
@@ -527,6 +546,141 @@ export const resendBrandActivation = CatchAsyncError(
       });
     } catch (error: any) {
       return next(new ErrorHandler(`Failed to resend activation email: ${error.message}`, 500));
+    }
+  }
+);
+
+// Forgot password - send reset code to email
+export const forgotPassword = CatchAsyncError(
+  async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const { email } = req.body;
+
+      if (!email) {
+        return next(new ErrorHandler("Email is required", 400));
+      }
+
+      // Find user by email
+      const user = await UserModel.findOne({ email });
+      if (!user) {
+        // Don't reveal if email exists or not for security
+        return res.status(200).json({
+          success: true,
+          message: "If an account with that email exists, a password reset code has been sent.",
+        });
+      }
+
+      // Check if user has a password (not just Google OAuth user)
+      if (!user.password && user.googleId) {
+        return next(
+          new ErrorHandler(
+            "This account uses Google Sign-In. Please log in with Google instead.",
+            400
+          )
+        );
+      }
+
+      // Create reset token
+      const { token, resetCode } = createResetToken(String(user._id));
+
+      // Get user display name
+      const userName = user.firstName || user.name || user.email.split("@")[0];
+
+      // Send reset email
+      const data = { user: { name: userName }, resetCode };
+
+      try {
+        await sendMail({
+          email: user.email,
+          subject: "Reset Your Password - Tex Resolve",
+          template: "reset-password.ejs",
+          data,
+        });
+
+        res.status(200).json({
+          success: true,
+          message: "Password reset code sent to your email.",
+          resetToken: token,
+        });
+      } catch (mailErr: any) {
+        console.error("Failed to send reset email:", mailErr);
+        console.error("Error details:", {
+          message: mailErr.message,
+          response: mailErr.response?.body || mailErr.response,
+          code: mailErr.code,
+        });
+        return next(
+          new ErrorHandler(
+            `Failed to send password reset email: ${mailErr.message}`,
+            500
+          )
+        );
+      }
+    } catch (error: any) {
+      return next(new ErrorHandler(`Forgot password failed: ${error.message}`, 500));
+    }
+  }
+);
+
+// Reset password - verify code and set new password
+export const resetPassword = CatchAsyncError(
+  async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const { reset_token, reset_code, new_password } = req.body;
+
+      if (!reset_token || !reset_code || !new_password) {
+        return next(
+          new ErrorHandler(
+            "Missing required fields: reset_token, reset_code, new_password",
+            400
+          )
+        );
+      }
+
+      // Validate password strength
+      if (new_password.length < 6) {
+        return next(
+          new ErrorHandler("Password must be at least 6 characters long", 400)
+        );
+      }
+
+      // Verify reset token
+      let decoded: IResetTokenPayload;
+      try {
+        decoded = jwt.verify(
+          reset_token,
+          process.env.ACTIVATION_SECRET as Secret
+        ) as IResetTokenPayload;
+      } catch (err: any) {
+        if (err.name === "TokenExpiredError") {
+          return next(
+            new ErrorHandler("Reset code has expired. Please request a new one.", 400)
+          );
+        }
+        return next(new ErrorHandler("Invalid reset token", 400));
+      }
+
+      // Verify reset code matches
+      if (decoded.resetCode !== reset_code) {
+        return next(new ErrorHandler("Invalid reset code", 400));
+      }
+
+      // Find user
+      const user = await UserModel.findById(decoded.userId);
+      if (!user) {
+        return next(new ErrorHandler("User not found", 404));
+      }
+
+      // Update password
+      user.password = new_password;
+      await user.save();
+
+      res.status(200).json({
+        success: true,
+        message: "Password reset successful. You can now log in with your new password.",
+      });
+    } catch (error: any) {
+      return next(new ErrorHandler(`Reset password failed: ${error.message}`, 500));
     }
   }
 );

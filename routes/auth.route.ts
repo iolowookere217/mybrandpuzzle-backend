@@ -9,6 +9,8 @@ import {
   login,
   resendGamerActivation,
   resendBrandActivation,
+  forgotPassword,
+  resetPassword,
 } from "../controllers/auth.controller";
 import { isAuthenticated } from "../utils/auth";
 
@@ -32,5 +34,9 @@ router.post("/auth/brand/resend-activation", resendBrandActivation);
 
 // Logout (requires authentication)
 router.post("/auth/logout", isAuthenticated, logout);
+
+// Password reset
+router.post("/auth/forgot-password", forgotPassword);
+router.post("/auth/reset-password", resetPassword);
 
 export default router;

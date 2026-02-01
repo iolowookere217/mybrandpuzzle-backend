@@ -21,4 +21,7 @@ router.post("/auth/brand/activate", auth_controller_1.activateBrand);
 router.post("/auth/brand/resend-activation", auth_controller_1.resendBrandActivation);
 // Logout (requires authentication)
 router.post("/auth/logout", auth_1.isAuthenticated, auth_controller_1.logout);
+// Password reset
+router.post("/auth/forgot-password", auth_controller_1.forgotPassword);
+router.post("/auth/reset-password", auth_controller_1.resetPassword);
 exports.default = router;

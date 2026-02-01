@@ -12,7 +12,7 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.resendBrandActivation = exports.resendGamerActivation = exports.activateBrand = exports.logout = exports.registerBrand = exports.login = exports.activateGamer = exports.registerGamer = exports.googleAuth = void 0;
+exports.resetPassword = exports.forgotPassword = exports.resendBrandActivation = exports.resendGamerActivation = exports.activateBrand = exports.logout = exports.registerBrand = exports.login = exports.activateGamer = exports.registerGamer = exports.googleAuth = void 0;
 const catchAsyncError_1 = require("../middlewares/catchAsyncError");
 const ErrorHandler_1 = __importDefault(require("../utils/ErrorHandler"));
 const user_model_1 = __importDefault(require("../models/user.model"));
@@ -27,6 +27,12 @@ const ejs_1 = __importDefault(require("ejs"));
 const sendEmail_1 = __importDefault(require("../utils/sendEmail"));
 const user_controller_1 = require("./user.controller");
 const userHelpers_1 = require("../utils/userHelpers");
+// Create password reset token
+const createResetToken = (userId) => {
+    const resetCode = Math.floor(100000 + Math.random() * 900000).toString();
+    const token = jsonwebtoken_1.default.sign({ userId, resetCode }, process.env.ACTIVATION_SECRET, { expiresIn: "15m" });
+    return { token, resetCode };
+};
 // Google OAuth sign-in (client provides profile info or idToken)
 exports.googleAuth = (0, catchAsyncError_1.CatchAsyncError)((req, res, next) => __awaiter(void 0, void 0, void 0, function* () {
     try {
@@ -430,5 +436,102 @@ exports.resendBrandActivation = (0, catchAsyncError_1.CatchAsyncError)((req, res
     }
     catch (error) {
         return next(new ErrorHandler_1.default(`Failed to resend activation email: ${error.message}`, 500));
+    }
+}));
+// Forgot password - send reset code to email
+exports.forgotPassword = (0, catchAsyncError_1.CatchAsyncError)((req, res, next) => __awaiter(void 0, void 0, void 0, function* () {
+    var _a;
+    try {
+        const { email } = req.body;
+        if (!email) {
+            return next(new ErrorHandler_1.default("Email is required", 400));
+        }
+        // Find user by email
+        const user = yield user_model_1.default.findOne({ email });
+        if (!user) {
+            // Don't reveal if email exists or not for security
+            return res.status(200).json({
+                success: true,
+                message: "If an account with that email exists, a password reset code has been sent.",
+            });
+        }
+        // Check if user has a password (not just Google OAuth user)
+        if (!user.password && user.googleId) {
+            return next(new ErrorHandler_1.default("This account uses Google Sign-In. Please log in with Google instead.", 400));
+        }
+        // Create reset token
+        const { token, resetCode } = createResetToken(String(user._id));
+        // Get user display name
+        const userName = user.firstName || user.name || user.email.split("@")[0];
+        // Send reset email
+        const data = { user: { name: userName }, resetCode };
+        try {
+            yield (0, sendEmail_1.default)({
+                email: user.email,
+                subject: "Reset Your Password - Tex Resolve",
+                template: "reset-password.ejs",
+                data,
+            });
+            res.status(200).json({
+                success: true,
+                message: "Password reset code sent to your email.",
+                resetToken: token,
+            });
+        }
+        catch (mailErr) {
+            console.error("Failed to send reset email:", mailErr);
+            console.error("Error details:", {
+                message: mailErr.message,
+                response: ((_a = mailErr.response) === null || _a === void 0 ? void 0 : _a.body) || mailErr.response,
+                code: mailErr.code,
+            });
+            return next(new ErrorHandler_1.default(`Failed to send password reset email: ${mailErr.message}`, 500));
+        }
+    }
+    catch (error) {
+        return next(new ErrorHandler_1.default(`Forgot password failed: ${error.message}`, 500));
+    }
+}));
+// Reset password - verify code and set new password
+exports.resetPassword = (0, catchAsyncError_1.CatchAsyncError)((req, res, next) => __awaiter(void 0, void 0, void 0, function* () {
+    try {
+        const { reset_token, reset_code, new_password } = req.body;
+        if (!reset_token || !reset_code || !new_password) {
+            return next(new ErrorHandler_1.default("Missing required fields: reset_token, reset_code, new_password", 400));
+        }
+        // Validate password strength
+        if (new_password.length < 6) {
+            return next(new ErrorHandler_1.default("Password must be at least 6 characters long", 400));
+        }
+        // Verify reset token
+        let decoded;
+        try {
+            decoded = jsonwebtoken_1.default.verify(reset_token, process.env.ACTIVATION_SECRET);
+        }
+        catch (err) {
+            if (err.name === "TokenExpiredError") {
+                return next(new ErrorHandler_1.default("Reset code has expired. Please request a new one.", 400));
+            }
+            return next(new ErrorHandler_1.default("Invalid reset token", 400));
+        }
+        // Verify reset code matches
+        if (decoded.resetCode !== reset_code) {
+            return next(new ErrorHandler_1.default("Invalid reset code", 400));
+        }
+        // Find user
+        const user = yield user_model_1.default.findById(decoded.userId);
+        if (!user) {
+            return next(new ErrorHandler_1.default("User not found", 404));
+        }
+        // Update password
+        user.password = new_password;
+        yield user.save();
+        res.status(200).json({
+            success: true,
+            message: "Password reset successful. You can now log in with your new password.",
+        });
+    }
+    catch (error) {
+        return next(new ErrorHandler_1.default(`Reset password failed: ${error.message}`, 500));
     }
 }));

@@ -22,6 +22,15 @@ const sendMail = (options) => __awaiter(void 0, void 0, void 0, function* () {
     // Set EMAIL_PROVIDER=twilio in your environment to use Twilio SendGrid
     // Set EMAIL_PROVIDER=gmail to use Gmail
     let emailProvider = (process.env.EMAIL_PROVIDER || "gmail").toLowerCase();
+    // Debug logging
+    console.log("Email Debug:", {
+        EMAIL_PROVIDER: process.env.EMAIL_PROVIDER,
+        SENDGRID_API_KEY: process.env.SENDGRID_API_KEY ? "✅ Set" : "❌ Not set",
+        TWILIO_SMTP_FROM: process.env.TWILIO_SMTP_FROM || "Not set",
+        SMTP_MAIL: process.env.SMTP_MAIL ? "⚠️ Set" : "✅ Not set",
+        SMTP_PASSWORD: process.env.SMTP_PASSWORD ? "⚠️ Set" : "✅ Not set",
+        resolvedProvider: emailProvider,
+    });
     // If Gmail SMTP credentials are present prefer Gmail for sending emails.
     // This allows quickly falling back to the previously working Gmail setup
     // while keeping the Twilio/SendGrid configuration available for later debugging.
