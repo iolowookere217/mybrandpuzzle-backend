@@ -3,37 +3,24 @@ import { CatchAsyncError } from "../middlewares/catchAsyncError";
 import ErrorHandler from "../utils/ErrorHandler";
 import TransactionModel from "../models/transaction.model";
 import PuzzleCampaignModel from "../models/puzzleCampaign.model";
-import PackageModel from "../models/package.model";
-import crypto from "crypto";
-import axios from "axios";
+import { paystackService } from "../services/payment";
 
-const PAYSTACK_SECRET_KEY = process.env.PAYSTACK_SECRET_KEY || "";
-const PAYSTACK_BASE_URL = "https://api.paystack.co";
 const FRONTEND_URL = process.env.FRONTEND_URL || "http://localhost:3000";
 
-// Log Paystack configuration on startup (only show first 8 characters for security)
-if (!PAYSTACK_SECRET_KEY) {
-  console.error("⚠️  PAYSTACK_SECRET_KEY is not configured in .env file!");
-} else {
-  console.log(
-    "✅ Paystack configured:",
-    PAYSTACK_SECRET_KEY.substring(0, 8) + "..."
-  );
-}
-
-// Log Frontend URL configuration
+// Log payment configuration on startup
+console.log("✅ Payment Gateway: Paystack");
 console.log("✅ Frontend URL configured:", FRONTEND_URL);
+
+if (process.env.PAYSTACK_SECRET_KEY) {
+  console.log("✅ Paystack is configured");
+} else {
+  console.warn("⚠️  Paystack is not configured - PAYSTACK_SECRET_KEY missing");
+}
 
 // Package pricing
 const PACKAGE_PRICES = {
   basic: 7000, // ₦7,000
   premium: 10000, // ₦10,000
-};
-
-// Fixed daily rates
-const DAILY_RATES = {
-  basic: 1000, // ₦7,000 / 7 days
-  premium: 1428.57, // ₦10,000 / 7 days
 };
 
 // Initialize payment for campaign
@@ -46,6 +33,13 @@ export const initializePayment = CatchAsyncError(
       if (!campaignId || !email) {
         return next(
           new ErrorHandler("Missing required fields: campaignId, email", 400)
+        );
+      }
+
+      // Check if Paystack is configured
+      if (!process.env.PAYSTACK_SECRET_KEY) {
+        return next(
+          new ErrorHandler("Payment gateway is not configured", 400)
         );
       }
 
@@ -74,6 +68,19 @@ export const initializePayment = CatchAsyncError(
         0;
       const packageType = campaign.packageType || "basic";
 
+      console.log("Payment Debug:", {
+        expectedChargeAmount: campaign.expectedChargeAmount,
+        totalBudget: campaign.totalBudget,
+        packageType: campaign.packageType,
+        calculatedAmount: amount,
+      });
+
+      if (amount <= 0) {
+        return next(
+          new ErrorHandler("Invalid payment amount. Please check campaign pricing.", 400)
+        );
+      }
+
       const reference = `campaign_${campaignId}_${Date.now()}_${Math.random()
         .toString(36)
         .substring(7)}`;
@@ -89,37 +96,26 @@ export const initializePayment = CatchAsyncError(
         status: "pending",
       });
 
-      // Initialize Paystack payment
-      const paystackResponse = await axios.post(
-        `${PAYSTACK_BASE_URL}/transaction/initialize`,
-        {
-          email,
-          amount: amount * 100, // Convert to kobo
-          reference,
-          currency: "NGN",
-          callback_url: `${FRONTEND_URL}/payment/verify?reference=${reference}`,
-          metadata: {
-            campaignId,
-            brandId: user._id,
-            packageType,
-            transactionId: transaction._id,
-          },
+      // Initialize payment with Paystack
+      const paymentResponse = await paystackService.initialize({
+        email,
+        amount,
+        reference,
+        currency: "NGN",
+        callbackUrl: `${FRONTEND_URL}/payment/verify?reference=${reference}`,
+        metadata: {
+          campaignId,
+          brandId: user._id,
+          packageType,
+          transactionId: String(transaction._id),
         },
-        {
-          headers: {
-            Authorization: `Bearer ${PAYSTACK_SECRET_KEY}`,
-            "Content-Type": "application/json",
-          },
-        }
-      );
-
-      const responseData = paystackResponse.data as any;
+      });
 
       res.status(200).json({
         success: true,
         data: {
-          authorization_url: responseData.data.authorization_url,
-          access_code: responseData.data.access_code,
+          authorization_url: paymentResponse.authorizationUrl,
+          access_code: paymentResponse.accessCode,
           reference,
         },
       });
@@ -176,50 +172,38 @@ export const verifyPayment = CatchAsyncError(
       }
 
       // Verify with Paystack
-      const paystackResponse = await axios.get(
-        `${PAYSTACK_BASE_URL}/transaction/verify/${reference}`,
-        {
-          headers: {
-            Authorization: `Bearer ${PAYSTACK_SECRET_KEY}`,
-          },
-        }
-      );
+      const verifyResponse = await paystackService.verify(reference);
 
-      const responseData = paystackResponse.data as any;
-      const paymentData = responseData.data;
-
-      if (paymentData.status === "success") {
+      if (verifyResponse.success) {
         // Update transaction
         transaction.status = "success";
-        transaction.paystackResponse = paymentData;
+        transaction.paystackResponse = verifyResponse.rawResponse;
         await transaction.save();
 
         // Update campaign with payment details and activate it
-        if (campaign) {
-          const packageType = transaction.packageType as "basic" | "premium";
-          const now = new Date();
-          const timeLimitInHours = campaign.timeLimit;
-          const endDate = new Date(
-            now.getTime() + timeLimitInHours * 60 * 60 * 1000
-          );
+        const packageType = transaction.packageType as "basic" | "premium";
+        const now = new Date();
+        const timeLimitInHours = campaign.timeLimit;
+        const endDate = new Date(
+          now.getTime() + timeLimitInHours * 60 * 60 * 1000
+        );
 
-          // Use the charged amount as the campaign's allocated budget
-          const allocatedBudget = transaction.amount || 0;
-          const days = Math.max(1, Math.ceil((campaign.timeLimit || 168) / 24));
-          const dailyAllocation = Number((allocatedBudget / days).toFixed(2));
+        // Use the charged amount as the campaign's allocated budget
+        const allocatedBudget = transaction.amount || 0;
+        const days = Math.max(1, Math.ceil((campaign.timeLimit || 168) / 24));
+        const dailyAllocation = Number((allocatedBudget / days).toFixed(2));
 
-          campaign.packageType = packageType;
-          campaign.totalBudget = allocatedBudget; // allocated budget = amount paid
-          campaign.dailyAllocation = dailyAllocation;
-          campaign.budgetRemaining = allocatedBudget;
-          campaign.budgetUsed = 0;
-          campaign.paymentStatus = "paid";
-          campaign.transactionId = String(transaction._id);
-          campaign.status = "active";
-          campaign.startDate = now;
-          campaign.endDate = endDate;
-          await campaign.save();
-        }
+        campaign.packageType = packageType;
+        campaign.totalBudget = allocatedBudget;
+        campaign.dailyAllocation = dailyAllocation;
+        campaign.budgetRemaining = allocatedBudget;
+        campaign.budgetUsed = 0;
+        campaign.paymentStatus = "paid";
+        campaign.transactionId = String(transaction._id);
+        campaign.status = "active";
+        campaign.startDate = now;
+        campaign.endDate = endDate;
+        await campaign.save();
 
         res.status(200).json({
           success: true,
@@ -233,13 +217,13 @@ export const verifyPayment = CatchAsyncError(
         });
       } else {
         transaction.status = "failed";
-        transaction.paystackResponse = paymentData;
+        transaction.paystackResponse = verifyResponse.rawResponse;
         await transaction.save();
 
         res.status(400).json({
           success: false,
           message: "Payment verification failed",
-          status: paymentData.status,
+          status: verifyResponse.status,
         });
       }
     } catch (error: any) {
@@ -250,23 +234,57 @@ export const verifyPayment = CatchAsyncError(
   }
 );
 
+// Helper function to activate campaign after successful payment
+async function activateCampaignAfterPayment(
+  transaction: any,
+  paymentData: any
+) {
+  const campaign = await PuzzleCampaignModel.findById(transaction.campaignId);
+
+  if (campaign) {
+    const packageType = transaction.packageType as "basic" | "premium";
+    const now = new Date();
+    const timeLimitInHours = campaign.timeLimit;
+    const endDate = new Date(
+      now.getTime() + timeLimitInHours * 60 * 60 * 1000
+    );
+
+    // Use the charged amount as the campaign's allocated budget
+    const allocatedBudget = transaction.amount || 0;
+    const days = Math.max(1, Math.ceil((campaign.timeLimit || 168) / 24));
+    const dailyAllocation = Number((allocatedBudget / days).toFixed(2));
+
+    campaign.packageType = packageType;
+    campaign.totalBudget = allocatedBudget;
+    campaign.dailyAllocation = dailyAllocation;
+    campaign.budgetRemaining = allocatedBudget;
+    campaign.budgetUsed = 0;
+    campaign.paymentStatus = "paid";
+    campaign.transactionId = String(transaction._id);
+    campaign.status = "active";
+    campaign.startDate = now;
+    campaign.endDate = endDate;
+    await campaign.save();
+  }
+}
+
 // Paystack webhook for payment notifications
 export const paystackWebhook = CatchAsyncError(
   async (req: Request, res: Response, next: NextFunction) => {
     try {
-      const hash = crypto
-        .createHmac("sha512", PAYSTACK_SECRET_KEY)
-        .update(JSON.stringify(req.body))
-        .digest("hex");
+      const validationResult = paystackService.validateWebhook(
+        req.headers,
+        req.body
+      );
 
-      if (hash !== req.headers["x-paystack-signature"]) {
+      if (!validationResult.isValid) {
         return res.status(400).send("Invalid signature");
       }
 
       const event = req.body;
 
       if (event.event === "charge.success") {
-        const { reference, metadata } = event.data;
+        const { reference } = event.data;
 
         // Find and update transaction
         const transaction = await TransactionModel.findOne({ reference });
@@ -275,38 +293,8 @@ export const paystackWebhook = CatchAsyncError(
           transaction.paystackResponse = event.data;
           await transaction.save();
 
-          // Update campaign and activate it
-          const campaign = await PuzzleCampaignModel.findById(
-            metadata.campaignId
-          );
-          if (campaign) {
-            const packageType = transaction.packageType as "basic" | "premium";
-            const now = new Date();
-            const timeLimitInHours = campaign.timeLimit;
-            const endDate = new Date(
-              now.getTime() + timeLimitInHours * 60 * 60 * 1000
-            );
-
-            // Use the charged amount as the campaign's allocated budget
-            const allocatedBudget = transaction.amount || 0;
-            const days = Math.max(
-              1,
-              Math.ceil((campaign.timeLimit || 168) / 24)
-            );
-            const dailyAllocation = Number((allocatedBudget / days).toFixed(2));
-
-            campaign.packageType = packageType;
-            campaign.totalBudget = allocatedBudget; // allocated budget = amount paid
-            campaign.dailyAllocation = dailyAllocation;
-            campaign.budgetRemaining = allocatedBudget;
-            campaign.budgetUsed = 0;
-            campaign.paymentStatus = "paid";
-            campaign.transactionId = String(transaction._id);
-            campaign.status = "active";
-            campaign.startDate = now;
-            campaign.endDate = endDate;
-            await campaign.save();
-          }
+          // Activate campaign
+          await activateCampaignAfterPayment(transaction, event.data);
         }
       }
 

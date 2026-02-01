@@ -40,7 +40,6 @@ const transactionSchema = new mongoose_1.default.Schema({
     packageType: { type: String, enum: ["basic", "premium"], required: true },
     amount: { type: Number, required: true },
     currency: { type: String, default: "NGN" },
-    paymentGateway: { type: String, default: "paystack" },
     reference: { type: String, required: true, unique: true, index: true },
     status: { type: String, enum: ["pending", "success", "failed"], default: "pending" },
     paystackResponse: { type: mongoose_1.Schema.Types.Mixed },

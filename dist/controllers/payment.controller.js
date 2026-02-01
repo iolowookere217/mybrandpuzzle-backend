@@ -17,29 +17,21 @@ const catchAsyncError_1 = require("../middlewares/catchAsyncError");
 const ErrorHandler_1 = __importDefault(require("../utils/ErrorHandler"));
 const transaction_model_1 = __importDefault(require("../models/transaction.model"));
 const puzzleCampaign_model_1 = __importDefault(require("../models/puzzleCampaign.model"));
-const crypto_1 = __importDefault(require("crypto"));
-const axios_1 = __importDefault(require("axios"));
-const PAYSTACK_SECRET_KEY = process.env.PAYSTACK_SECRET_KEY || "";
-const PAYSTACK_BASE_URL = "https://api.paystack.co";
+const payment_1 = require("../services/payment");
 const FRONTEND_URL = process.env.FRONTEND_URL || "http://localhost:3000";
-// Log Paystack configuration on startup (only show first 8 characters for security)
-if (!PAYSTACK_SECRET_KEY) {
-    console.error("⚠️  PAYSTACK_SECRET_KEY is not configured in .env file!");
+// Log payment configuration on startup
+console.log("✅ Payment Gateway: Paystack");
+console.log("✅ Frontend URL configured:", FRONTEND_URL);
+if (process.env.PAYSTACK_SECRET_KEY) {
+    console.log("✅ Paystack is configured");
 }
 else {
-    console.log("✅ Paystack configured:", PAYSTACK_SECRET_KEY.substring(0, 8) + "...");
+    console.warn("⚠️  Paystack is not configured - PAYSTACK_SECRET_KEY missing");
 }
-// Log Frontend URL configuration
-console.log("✅ Frontend URL configured:", FRONTEND_URL);
 // Package pricing
 const PACKAGE_PRICES = {
     basic: 7000, // ₦7,000
     premium: 10000, // ₦10,000
-};
-// Fixed daily rates
-const DAILY_RATES = {
-    basic: 1000, // ₦7,000 / 7 days
-    premium: 1428.57, // ₦10,000 / 7 days
 };
 // Initialize payment for campaign
 exports.initializePayment = (0, catchAsyncError_1.CatchAsyncError)((req, res, next) => __awaiter(void 0, void 0, void 0, function* () {
@@ -48,6 +40,10 @@ exports.initializePayment = (0, catchAsyncError_1.CatchAsyncError)((req, res, ne
         const user = req.user;
         if (!campaignId || !email) {
             return next(new ErrorHandler_1.default("Missing required fields: campaignId, email", 400));
+        }
+        // Check if Paystack is configured
+        if (!process.env.PAYSTACK_SECRET_KEY) {
+            return next(new ErrorHandler_1.default("Payment gateway is not configured", 400));
         }
         // Check if campaign exists
         const campaign = yield puzzleCampaign_model_1.default.findById(campaignId);
@@ -65,6 +61,15 @@ exports.initializePayment = (0, catchAsyncError_1.CatchAsyncError)((req, res, ne
             PACKAGE_PRICES[campaign.packageType] ||
             0;
         const packageType = campaign.packageType || "basic";
+        console.log("Payment Debug:", {
+            expectedChargeAmount: campaign.expectedChargeAmount,
+            totalBudget: campaign.totalBudget,
+            packageType: campaign.packageType,
+            calculatedAmount: amount,
+        });
+        if (amount <= 0) {
+            return next(new ErrorHandler_1.default("Invalid payment amount. Please check campaign pricing.", 400));
+        }
         const reference = `campaign_${campaignId}_${Date.now()}_${Math.random()
             .toString(36)
             .substring(7)}`;
@@ -78,31 +83,25 @@ exports.initializePayment = (0, catchAsyncError_1.CatchAsyncError)((req, res, ne
             reference,
             status: "pending",
         });
-        // Initialize Paystack payment
-        const paystackResponse = yield axios_1.default.post(`${PAYSTACK_BASE_URL}/transaction/initialize`, {
+        // Initialize payment with Paystack
+        const paymentResponse = yield payment_1.paystackService.initialize({
             email,
-            amount: amount * 100, // Convert to kobo
+            amount,
             reference,
             currency: "NGN",
-            callback_url: `${FRONTEND_URL}/payment/verify?reference=${reference}`,
+            callbackUrl: `${FRONTEND_URL}/payment/verify?reference=${reference}`,
             metadata: {
                 campaignId,
                 brandId: user._id,
                 packageType,
-                transactionId: transaction._id,
-            },
-        }, {
-            headers: {
-                Authorization: `Bearer ${PAYSTACK_SECRET_KEY}`,
-                "Content-Type": "application/json",
+                transactionId: String(transaction._id),
             },
         });
-        const responseData = paystackResponse.data;
         res.status(200).json({
             success: true,
             data: {
-                authorization_url: responseData.data.authorization_url,
-                access_code: responseData.data.access_code,
+                authorization_url: paymentResponse.authorizationUrl,
+                access_code: paymentResponse.accessCode,
                 reference,
             },
         });
@@ -137,40 +136,32 @@ exports.verifyPayment = (0, catchAsyncError_1.CatchAsyncError)((req, res, next) 
             return next(new ErrorHandler_1.default("This payment reference does not belong to your campaign", 403));
         }
         // Verify with Paystack
-        const paystackResponse = yield axios_1.default.get(`${PAYSTACK_BASE_URL}/transaction/verify/${reference}`, {
-            headers: {
-                Authorization: `Bearer ${PAYSTACK_SECRET_KEY}`,
-            },
-        });
-        const responseData = paystackResponse.data;
-        const paymentData = responseData.data;
-        if (paymentData.status === "success") {
+        const verifyResponse = yield payment_1.paystackService.verify(reference);
+        if (verifyResponse.success) {
             // Update transaction
             transaction.status = "success";
-            transaction.paystackResponse = paymentData;
+            transaction.paystackResponse = verifyResponse.rawResponse;
             yield transaction.save();
             // Update campaign with payment details and activate it
-            if (campaign) {
-                const packageType = transaction.packageType;
-                const now = new Date();
-                const timeLimitInHours = campaign.timeLimit;
-                const endDate = new Date(now.getTime() + timeLimitInHours * 60 * 60 * 1000);
-                // Use the charged amount as the campaign's allocated budget
-                const allocatedBudget = transaction.amount || 0;
-                const days = Math.max(1, Math.ceil((campaign.timeLimit || 168) / 24));
-                const dailyAllocation = Number((allocatedBudget / days).toFixed(2));
-                campaign.packageType = packageType;
-                campaign.totalBudget = allocatedBudget; // allocated budget = amount paid
-                campaign.dailyAllocation = dailyAllocation;
-                campaign.budgetRemaining = allocatedBudget;
-                campaign.budgetUsed = 0;
-                campaign.paymentStatus = "paid";
-                campaign.transactionId = String(transaction._id);
-                campaign.status = "active";
-                campaign.startDate = now;
-                campaign.endDate = endDate;
-                yield campaign.save();
-            }
+            const packageType = transaction.packageType;
+            const now = new Date();
+            const timeLimitInHours = campaign.timeLimit;
+            const endDate = new Date(now.getTime() + timeLimitInHours * 60 * 60 * 1000);
+            // Use the charged amount as the campaign's allocated budget
+            const allocatedBudget = transaction.amount || 0;
+            const days = Math.max(1, Math.ceil((campaign.timeLimit || 168) / 24));
+            const dailyAllocation = Number((allocatedBudget / days).toFixed(2));
+            campaign.packageType = packageType;
+            campaign.totalBudget = allocatedBudget;
+            campaign.dailyAllocation = dailyAllocation;
+            campaign.budgetRemaining = allocatedBudget;
+            campaign.budgetUsed = 0;
+            campaign.paymentStatus = "paid";
+            campaign.transactionId = String(transaction._id);
+            campaign.status = "active";
+            campaign.startDate = now;
+            campaign.endDate = endDate;
+            yield campaign.save();
             res.status(200).json({
                 success: true,
                 message: "Payment verified successfully",
@@ -184,12 +175,12 @@ exports.verifyPayment = (0, catchAsyncError_1.CatchAsyncError)((req, res, next) 
         }
         else {
             transaction.status = "failed";
-            transaction.paystackResponse = paymentData;
+            transaction.paystackResponse = verifyResponse.rawResponse;
             yield transaction.save();
             res.status(400).json({
                 success: false,
                 message: "Payment verification failed",
-                status: paymentData.status,
+                status: verifyResponse.status,
             });
         }
     }
@@ -197,48 +188,51 @@ exports.verifyPayment = (0, catchAsyncError_1.CatchAsyncError)((req, res, next) 
         return next(new ErrorHandler_1.default(`Failed to verify payment: ${error.message}`, 500));
     }
 }));
+// Helper function to activate campaign after successful payment
+function activateCampaignAfterPayment(transaction, paymentData) {
+    return __awaiter(this, void 0, void 0, function* () {
+        const campaign = yield puzzleCampaign_model_1.default.findById(transaction.campaignId);
+        if (campaign) {
+            const packageType = transaction.packageType;
+            const now = new Date();
+            const timeLimitInHours = campaign.timeLimit;
+            const endDate = new Date(now.getTime() + timeLimitInHours * 60 * 60 * 1000);
+            // Use the charged amount as the campaign's allocated budget
+            const allocatedBudget = transaction.amount || 0;
+            const days = Math.max(1, Math.ceil((campaign.timeLimit || 168) / 24));
+            const dailyAllocation = Number((allocatedBudget / days).toFixed(2));
+            campaign.packageType = packageType;
+            campaign.totalBudget = allocatedBudget;
+            campaign.dailyAllocation = dailyAllocation;
+            campaign.budgetRemaining = allocatedBudget;
+            campaign.budgetUsed = 0;
+            campaign.paymentStatus = "paid";
+            campaign.transactionId = String(transaction._id);
+            campaign.status = "active";
+            campaign.startDate = now;
+            campaign.endDate = endDate;
+            yield campaign.save();
+        }
+    });
+}
 // Paystack webhook for payment notifications
 exports.paystackWebhook = (0, catchAsyncError_1.CatchAsyncError)((req, res, next) => __awaiter(void 0, void 0, void 0, function* () {
     try {
-        const hash = crypto_1.default
-            .createHmac("sha512", PAYSTACK_SECRET_KEY)
-            .update(JSON.stringify(req.body))
-            .digest("hex");
-        if (hash !== req.headers["x-paystack-signature"]) {
+        const validationResult = payment_1.paystackService.validateWebhook(req.headers, req.body);
+        if (!validationResult.isValid) {
             return res.status(400).send("Invalid signature");
         }
         const event = req.body;
         if (event.event === "charge.success") {
-            const { reference, metadata } = event.data;
+            const { reference } = event.data;
             // Find and update transaction
             const transaction = yield transaction_model_1.default.findOne({ reference });
             if (transaction && transaction.status === "pending") {
                 transaction.status = "success";
                 transaction.paystackResponse = event.data;
                 yield transaction.save();
-                // Update campaign and activate it
-                const campaign = yield puzzleCampaign_model_1.default.findById(metadata.campaignId);
-                if (campaign) {
-                    const packageType = transaction.packageType;
-                    const now = new Date();
-                    const timeLimitInHours = campaign.timeLimit;
-                    const endDate = new Date(now.getTime() + timeLimitInHours * 60 * 60 * 1000);
-                    // Use the charged amount as the campaign's allocated budget
-                    const allocatedBudget = transaction.amount || 0;
-                    const days = Math.max(1, Math.ceil((campaign.timeLimit || 168) / 24));
-                    const dailyAllocation = Number((allocatedBudget / days).toFixed(2));
-                    campaign.packageType = packageType;
-                    campaign.totalBudget = allocatedBudget; // allocated budget = amount paid
-                    campaign.dailyAllocation = dailyAllocation;
-                    campaign.budgetRemaining = allocatedBudget;
-                    campaign.budgetUsed = 0;
-                    campaign.paymentStatus = "paid";
-                    campaign.transactionId = String(transaction._id);
-                    campaign.status = "active";
-                    campaign.startDate = now;
-                    campaign.endDate = endDate;
-                    yield campaign.save();
-                }
+                // Activate campaign
+                yield activateCampaignAfterPayment(transaction, event.data);
             }
         }
         res.status(200).send("Webhook received");

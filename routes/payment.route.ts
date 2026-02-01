@@ -25,8 +25,11 @@ const router = express.Router();
 // Payment endpoints
 router.post("/payments/initialize", isAuthenticated, authorizeRoles("brand"), initializePayment);
 router.get("/payments/verify/:reference", isAuthenticated, authorizeRoles("brand"), verifyPayment);
-router.post("/payments/webhook", paystackWebhook); // Paystack webhook (no auth)
 router.get("/payments/transactions", isAuthenticated, authorizeRoles("brand"), getTransactionHistory);
+
+// Paystack webhook (no auth - called by Paystack)
+router.post("/payments/webhook/paystack", paystackWebhook);
+router.post("/payments/webhook", paystackWebhook); // Legacy endpoint
 
 // Campaign budget
 router.get("/campaigns/:campaignId/budget", getCampaignBudget);

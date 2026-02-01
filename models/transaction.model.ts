@@ -6,7 +6,6 @@ export interface ITransaction extends Document {
   packageType: "basic" | "premium";
   amount: number;
   currency: string;
-  paymentGateway: "paystack";
   reference: string;
   status: "pending" | "success" | "failed";
   paystackResponse?: any;
@@ -22,7 +21,6 @@ const transactionSchema: Schema<ITransaction> = new mongoose.Schema(
     packageType: { type: String, enum: ["basic", "premium"], required: true },
     amount: { type: Number, required: true },
     currency: { type: String, default: "NGN" },
-    paymentGateway: { type: String, default: "paystack" },
     reference: { type: String, required: true, unique: true, index: true },
     status: { type: String, enum: ["pending", "success", "failed"], default: "pending" },
     paystackResponse: { type: Schema.Types.Mixed },
