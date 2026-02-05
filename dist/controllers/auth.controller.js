@@ -29,9 +29,8 @@ const user_controller_1 = require("./user.controller");
 const userHelpers_1 = require("../utils/userHelpers");
 // Create password reset token
 const createResetToken = (userId) => {
-    const resetCode = Math.floor(100000 + Math.random() * 900000).toString();
-    const token = jsonwebtoken_1.default.sign({ userId, resetCode }, process.env.ACTIVATION_SECRET, { expiresIn: "15m" });
-    return { token, resetCode };
+    const token = jsonwebtoken_1.default.sign({ userId }, process.env.ACTIVATION_SECRET, { expiresIn: "15m" });
+    return token;
 };
 // Google OAuth sign-in (client provides profile info or idToken)
 exports.googleAuth = (0, catchAsyncError_1.CatchAsyncError)((req, res, next) => __awaiter(void 0, void 0, void 0, function* () {
@@ -438,7 +437,7 @@ exports.resendBrandActivation = (0, catchAsyncError_1.CatchAsyncError)((req, res
         return next(new ErrorHandler_1.default(`Failed to resend activation email: ${error.message}`, 500));
     }
 }));
-// Forgot password - send reset code to email
+// Forgot password - send reset link to email
 exports.forgotPassword = (0, catchAsyncError_1.CatchAsyncError)((req, res, next) => __awaiter(void 0, void 0, void 0, function* () {
     var _a;
     try {
@@ -452,7 +451,7 @@ exports.forgotPassword = (0, catchAsyncError_1.CatchAsyncError)((req, res, next)
             // Don't reveal if email exists or not for security
             return res.status(200).json({
                 success: true,
-                message: "If an account with that email exists, a password reset code has been sent.",
+                message: "If an account with that email exists, a password reset link has been sent.",
             });
         }
         // Check if user has a password (not just Google OAuth user)
@@ -460,11 +459,14 @@ exports.forgotPassword = (0, catchAsyncError_1.CatchAsyncError)((req, res, next)
             return next(new ErrorHandler_1.default("This account uses Google Sign-In. Please log in with Google instead.", 400));
         }
         // Create reset token
-        const { token, resetCode } = createResetToken(String(user._id));
+        const resetToken = createResetToken(String(user._id));
+        // Build reset link
+        const frontendUrl = process.env.FRONTEND_URL || "http://localhost:3000";
+        const resetLink = `${frontendUrl}/reset-password?token=${resetToken}`;
         // Get user display name
         const userName = user.firstName || user.name || user.email.split("@")[0];
-        // Send reset email
-        const data = { user: { name: userName }, resetCode };
+        // Send reset email with link
+        const data = { user: { name: userName }, resetLink };
         try {
             yield (0, sendEmail_1.default)({
                 email: user.email,
@@ -474,8 +476,7 @@ exports.forgotPassword = (0, catchAsyncError_1.CatchAsyncError)((req, res, next)
             });
             res.status(200).json({
                 success: true,
-                message: "Password reset code sent to your email.",
-                resetToken: token,
+                message: "Password reset link sent to your email.",
             });
         }
         catch (mailErr) {
@@ -492,12 +493,12 @@ exports.forgotPassword = (0, catchAsyncError_1.CatchAsyncError)((req, res, next)
         return next(new ErrorHandler_1.default(`Forgot password failed: ${error.message}`, 500));
     }
 }));
-// Reset password - verify code and set new password
+// Reset password - verify token and set new password
 exports.resetPassword = (0, catchAsyncError_1.CatchAsyncError)((req, res, next) => __awaiter(void 0, void 0, void 0, function* () {
     try {
-        const { reset_token, reset_code, new_password } = req.body;
-        if (!reset_token || !reset_code || !new_password) {
-            return next(new ErrorHandler_1.default("Missing required fields: reset_token, reset_code, new_password", 400));
+        const { token, new_password } = req.body;
+        if (!token || !new_password) {
+            return next(new ErrorHandler_1.default("Missing required fields: token, new_password", 400));
         }
         // Validate password strength
         if (new_password.length < 6) {
@@ -506,17 +507,13 @@ exports.resetPassword = (0, catchAsyncError_1.CatchAsyncError)((req, res, next) 
         // Verify reset token
         let decoded;
         try {
-            decoded = jsonwebtoken_1.default.verify(reset_token, process.env.ACTIVATION_SECRET);
+            decoded = jsonwebtoken_1.default.verify(token, process.env.ACTIVATION_SECRET);
         }
         catch (err) {
             if (err.name === "TokenExpiredError") {
-                return next(new ErrorHandler_1.default("Reset code has expired. Please request a new one.", 400));
+                return next(new ErrorHandler_1.default("Reset link has expired. Please request a new one.", 400));
             }
             return next(new ErrorHandler_1.default("Invalid reset token", 400));
-        }
-        // Verify reset code matches
-        if (decoded.resetCode !== reset_code) {
-            return next(new ErrorHandler_1.default("Invalid reset code", 400));
         }
         // Find user
         const user = yield user_model_1.default.findById(decoded.userId);

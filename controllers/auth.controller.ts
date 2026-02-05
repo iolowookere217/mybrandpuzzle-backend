@@ -18,20 +18,17 @@ import { generateUsername, generateAvatar } from "../utils/userHelpers";
 // Interface for password reset token payload
 interface IResetTokenPayload {
   userId: string;
-  resetCode: string;
 }
 
 // Create password reset token
-const createResetToken = (userId: string): { token: string; resetCode: string } => {
-  const resetCode = Math.floor(100000 + Math.random() * 900000).toString();
-
+const createResetToken = (userId: string): string => {
   const token = jwt.sign(
-    { userId, resetCode } as IResetTokenPayload,
+    { userId } as IResetTokenPayload,
     process.env.ACTIVATION_SECRET as Secret,
     { expiresIn: "15m" }
   );
 
-  return { token, resetCode };
+  return token;
 };
 
 // Google OAuth sign-in (client provides profile info or idToken)
@@ -550,7 +547,7 @@ export const resendBrandActivation = CatchAsyncError(
   }
 );
 
-// Forgot password - send reset code to email
+// Forgot password - send reset link to email
 export const forgotPassword = CatchAsyncError(
   async (req: Request, res: Response, next: NextFunction) => {
     try {
@@ -566,7 +563,7 @@ export const forgotPassword = CatchAsyncError(
         // Don't reveal if email exists or not for security
         return res.status(200).json({
           success: true,
-          message: "If an account with that email exists, a password reset code has been sent.",
+          message: "If an account with that email exists, a password reset link has been sent.",
         });
       }
 
@@ -581,13 +578,17 @@ export const forgotPassword = CatchAsyncError(
       }
 
       // Create reset token
-      const { token, resetCode } = createResetToken(String(user._id));
+      const resetToken = createResetToken(String(user._id));
+
+      // Build reset link
+      const frontendUrl = process.env.FRONTEND_URL || "http://localhost:3000";
+      const resetLink = `${frontendUrl}/reset-password?token=${resetToken}`;
 
       // Get user display name
       const userName = user.firstName || user.name || user.email.split("@")[0];
 
-      // Send reset email
-      const data = { user: { name: userName }, resetCode };
+      // Send reset email with link
+      const data = { user: { name: userName }, resetLink };
 
       try {
         await sendMail({
@@ -599,8 +600,7 @@ export const forgotPassword = CatchAsyncError(
 
         res.status(200).json({
           success: true,
-          message: "Password reset code sent to your email.",
-          resetToken: token,
+          message: "Password reset link sent to your email.",
         });
       } catch (mailErr: any) {
         console.error("Failed to send reset email:", mailErr);
@@ -622,16 +622,16 @@ export const forgotPassword = CatchAsyncError(
   }
 );
 
-// Reset password - verify code and set new password
+// Reset password - verify token and set new password
 export const resetPassword = CatchAsyncError(
   async (req: Request, res: Response, next: NextFunction) => {
     try {
-      const { reset_token, reset_code, new_password } = req.body;
+      const { token, new_password } = req.body;
 
-      if (!reset_token || !reset_code || !new_password) {
+      if (!token || !new_password) {
         return next(
           new ErrorHandler(
-            "Missing required fields: reset_token, reset_code, new_password",
+            "Missing required fields: token, new_password",
             400
           )
         );
@@ -648,21 +648,16 @@ export const resetPassword = CatchAsyncError(
       let decoded: IResetTokenPayload;
       try {
         decoded = jwt.verify(
-          reset_token,
+          token,
           process.env.ACTIVATION_SECRET as Secret
         ) as IResetTokenPayload;
       } catch (err: any) {
         if (err.name === "TokenExpiredError") {
           return next(
-            new ErrorHandler("Reset code has expired. Please request a new one.", 400)
+            new ErrorHandler("Reset link has expired. Please request a new one.", 400)
           );
         }
         return next(new ErrorHandler("Invalid reset token", 400));
-      }
-
-      // Verify reset code matches
-      if (decoded.resetCode !== reset_code) {
-        return next(new ErrorHandler("Invalid reset code", 400));
       }
 
       // Find user
