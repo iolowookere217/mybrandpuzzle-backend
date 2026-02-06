@@ -3,12 +3,10 @@ import {
   googleAuth,
   registerBrand,
   logout,
-  activateBrand,
   registerGamer,
-  activateGamer,
+  activateUser,
   login,
-  resendGamerActivation,
-  resendBrandActivation,
+  resendActivation,
   forgotPassword,
   resetPassword,
 } from "../controllers/auth.controller";
@@ -24,13 +22,13 @@ router.post("/auth/login", login);
 
 // Gamer routes (email/password)
 router.post("/auth/gamer/register", registerGamer);
-router.post("/auth/gamer/activate", activateGamer);
-router.post("/auth/gamer/resend-activation", resendGamerActivation);
 
 // Brand routes
 router.post("/auth/brand/register", registerBrand);
-router.post("/auth/brand/activate", activateBrand);
-router.post("/auth/brand/resend-activation", resendBrandActivation);
+
+// Unified user activation and resend
+router.post("/auth/user/activate", activateUser);
+router.post("/auth/user/resend-activation", resendActivation);
 
 // Logout (requires authentication)
 router.post("/auth/logout", isAuthenticated, logout);

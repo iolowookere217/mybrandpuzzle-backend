@@ -12,7 +12,7 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.resetPassword = exports.forgotPassword = exports.resendBrandActivation = exports.resendGamerActivation = exports.activateBrand = exports.logout = exports.registerBrand = exports.login = exports.activateGamer = exports.registerGamer = exports.googleAuth = void 0;
+exports.resetPassword = exports.forgotPassword = exports.resendActivation = exports.logout = exports.registerBrand = exports.login = exports.activateUser = exports.registerGamer = exports.googleAuth = void 0;
 const catchAsyncError_1 = require("../middlewares/catchAsyncError");
 const ErrorHandler_1 = __importDefault(require("../utils/ErrorHandler"));
 const user_model_1 = __importDefault(require("../models/user.model"));
@@ -114,6 +114,7 @@ exports.registerGamer = (0, catchAsyncError_1.CatchAsyncError)((req, res, next) 
             lastName,
             email,
             password,
+            role: "gamer",
         });
         const activationCode = activationToken.activationCode;
         const data = { user: { name: firstName }, activationCode };
@@ -153,8 +154,8 @@ exports.registerGamer = (0, catchAsyncError_1.CatchAsyncError)((req, res, next) 
         return next(new ErrorHandler_1.default(`Gamer registration failed: ${error.message}`, 500));
     }
 }));
-// Gamer email activation
-exports.activateGamer = (0, catchAsyncError_1.CatchAsyncError)((req, res, next) => __awaiter(void 0, void 0, void 0, function* () {
+// Unified user activation (handles both gamer and brand)
+exports.activateUser = (0, catchAsyncError_1.CatchAsyncError)((req, res, next) => __awaiter(void 0, void 0, void 0, function* () {
     try {
         const { activation_token, activation_code } = req.body;
         if (!activation_token || !activation_code)
@@ -164,34 +165,72 @@ exports.activateGamer = (0, catchAsyncError_1.CatchAsyncError)((req, res, next) 
             return next(new ErrorHandler_1.default("Invalid activation token", 400));
         if (decoded.activationCode !== activation_code)
             return next(new ErrorHandler_1.default("Invalid activation code", 400));
-        const { firstName, lastName, email, password } = decoded.user;
-        // check if user exists
-        const exist = yield user_model_1.default.findOne({ email });
-        if (exist) {
-            if (exist.role !== "gamer") {
+        const { email, password, role } = decoded.user;
+        // Check if user already exists
+        const existingUser = yield user_model_1.default.findOne({ email });
+        if (existingUser) {
+            if (existingUser.role !== role) {
                 return next(new ErrorHandler_1.default("Email is registered as a different account type", 400));
             }
-            // mark as verified
-            if (!exist.isVerified) {
-                exist.isVerified = true;
-                yield exist.save();
+            // Mark as verified if not already
+            if (!existingUser.isVerified) {
+                existingUser.isVerified = true;
+                yield existingUser.save();
             }
-            (0, jwt_1.sendToken)(exist, 200, res);
+            // For brands, ensure brand profile exists
+            if (role === "brand") {
+                const { companyName } = decoded.user;
+                const brandProfile = yield brand_model_1.default.findOne({ userId: existingUser._id });
+                if (!brandProfile) {
+                    yield brand_model_1.default.create({
+                        userId: existingUser._id,
+                        companyEmail: email,
+                        companyName,
+                        campaigns: [],
+                    });
+                }
+            }
+            (0, jwt_1.sendToken)(existingUser, 200, res);
             return;
         }
-        // create new gamer account
-        const username = yield (0, userHelpers_1.generateUsername)(email);
-        const avatar = (0, userHelpers_1.generateAvatar)(`${firstName} ${lastName || ''}`.trim() || email);
-        const user = yield user_model_1.default.create({
-            firstName,
-            lastName: lastName || "",
-            username,
-            email,
-            password,
-            avatar,
-            role: "gamer",
-            isVerified: true,
-        });
+        // Create new user based on role
+        let user;
+        if (role === "gamer") {
+            const { firstName, lastName } = decoded.user;
+            const username = yield (0, userHelpers_1.generateUsername)(email);
+            const avatar = (0, userHelpers_1.generateAvatar)(`${firstName} ${lastName || ''}`.trim() || email);
+            user = yield user_model_1.default.create({
+                firstName,
+                lastName: lastName || "",
+                username,
+                email,
+                password,
+                avatar,
+                role: "gamer",
+                isVerified: true,
+            });
+        }
+        else if (role === "brand") {
+            const { name, companyName } = decoded.user;
+            user = yield user_model_1.default.create({
+                name,
+                email,
+                password,
+                role: "brand",
+                companyName,
+                isVerified: true,
+            });
+            // Create brand profile
+            yield brand_model_1.default.create({
+                userId: user._id,
+                companyEmail: email,
+                companyName,
+                campaigns: [],
+            });
+        }
+        else {
+            return next(new ErrorHandler_1.default("Invalid account type", 400));
+        }
         (0, jwt_1.sendToken)(user, 201, res);
     }
     catch (error) {
@@ -237,6 +276,7 @@ exports.registerBrand = (0, catchAsyncError_1.CatchAsyncError)((req, res, next) 
             email,
             password,
             companyName,
+            role: "brand",
         });
         const activationCode = activationToken.activationCode;
         const data = { user: { name }, activationCode };
@@ -296,61 +336,8 @@ exports.logout = (0, catchAsyncError_1.CatchAsyncError)((req, res) => __awaiter(
     res.cookie("refresh_token", "", { maxAge: 1 });
     res.status(200).json({ success: true });
 }));
-exports.activateBrand = (0, catchAsyncError_1.CatchAsyncError)((req, res, next) => __awaiter(void 0, void 0, void 0, function* () {
-    try {
-        const { activation_token, activation_code } = req.body;
-        if (!activation_token || !activation_code)
-            return next(new ErrorHandler_1.default("Missing activation data", 400));
-        const decoded = jsonwebtoken_1.default.verify(activation_token, process.env.ACTIVATION_SECRET);
-        if (!decoded)
-            return next(new ErrorHandler_1.default("Invalid activation token", 400));
-        if (decoded.activationCode !== activation_code)
-            return next(new ErrorHandler_1.default("Invalid activation code", 400));
-        const { name, email, password, companyName } = decoded.user;
-        // check if user exists
-        const exist = yield user_model_1.default.findOne({ email });
-        if (exist) {
-            // if user exists, mark as verified and ensure brand profile exists
-            if (!exist.isVerified) {
-                exist.isVerified = true;
-                yield exist.save();
-            }
-            const brandProfile = yield brand_model_1.default.findOne({ userId: exist._id });
-            if (!brandProfile) {
-                yield brand_model_1.default.create({
-                    userId: exist._id,
-                    companyEmail: email,
-                    companyName,
-                    campaigns: [],
-                });
-            }
-            (0, jwt_1.sendToken)(exist, 200, res);
-            return;
-        }
-        // user doesn't exist yet: create account
-        const user = yield user_model_1.default.create({
-            name,
-            email,
-            password,
-            role: "brand",
-            companyName,
-            isVerified: true,
-        });
-        // ensure brand profile
-        yield brand_model_1.default.create({
-            userId: user._id,
-            companyEmail: email,
-            companyName,
-            campaigns: [],
-        });
-        (0, jwt_1.sendToken)(user, 201, res);
-    }
-    catch (error) {
-        return next(new ErrorHandler_1.default(`Brand activation failed: ${error.message}`, 500));
-    }
-}));
-// Resend activation email for gamer
-exports.resendGamerActivation = (0, catchAsyncError_1.CatchAsyncError)((req, res, next) => __awaiter(void 0, void 0, void 0, function* () {
+// Resend activation email (unified for both gamer and brand)
+exports.resendActivation = (0, catchAsyncError_1.CatchAsyncError)((req, res, next) => __awaiter(void 0, void 0, void 0, function* () {
     try {
         const { email } = req.body;
         if (!email) {
@@ -361,69 +348,41 @@ exports.resendGamerActivation = (0, catchAsyncError_1.CatchAsyncError)((req, res
         if (!user) {
             return next(new ErrorHandler_1.default("User not found", 404));
         }
-        if (user.role !== "gamer") {
-            return next(new ErrorHandler_1.default("This email is not registered as a gamer", 400));
-        }
         if (user.isVerified) {
             return next(new ErrorHandler_1.default("Account is already verified", 400));
         }
-        // Create new activation token
-        const activationToken = (0, user_controller_1.createActivationToken)({
-            firstName: user.firstName,
-            lastName: user.lastName,
-            email: user.email,
-            password: user.password, // hashed password from DB
-        });
+        // Create activation token based on role
+        let activationToken;
+        let displayName;
+        if (user.role === "gamer") {
+            activationToken = (0, user_controller_1.createActivationToken)({
+                firstName: user.firstName,
+                lastName: user.lastName,
+                email: user.email,
+                password: user.password,
+                role: "gamer",
+            });
+            displayName = user.firstName;
+        }
+        else if (user.role === "brand") {
+            activationToken = (0, user_controller_1.createActivationToken)({
+                name: user.name,
+                email: user.email,
+                password: user.password,
+                companyName: user.companyName,
+                role: "brand",
+            });
+            displayName = user.name;
+        }
+        else {
+            return next(new ErrorHandler_1.default("Invalid account type", 400));
+        }
         const activationCode = activationToken.activationCode;
-        const data = { user: { name: user.firstName }, activationCode };
+        const data = { user: { name: displayName }, activationCode };
         // Send activation email
         yield (0, sendEmail_1.default)({
             email: user.email,
-            subject: "Verify your gamer account",
-            template: "activation-mail.ejs",
-            data,
-        });
-        res.status(200).json({
-            success: true,
-            message: `Activation email resent to ${email}`,
-            activationToken: activationToken.token,
-        });
-    }
-    catch (error) {
-        return next(new ErrorHandler_1.default(`Failed to resend activation email: ${error.message}`, 500));
-    }
-}));
-// Resend activation email for brand
-exports.resendBrandActivation = (0, catchAsyncError_1.CatchAsyncError)((req, res, next) => __awaiter(void 0, void 0, void 0, function* () {
-    try {
-        const { email } = req.body;
-        if (!email) {
-            return next(new ErrorHandler_1.default("Email is required", 400));
-        }
-        // Find user
-        const user = yield user_model_1.default.findOne({ email });
-        if (!user) {
-            return next(new ErrorHandler_1.default("User not found", 404));
-        }
-        if (user.role !== "brand") {
-            return next(new ErrorHandler_1.default("This email is not registered as a brand", 400));
-        }
-        if (user.isVerified) {
-            return next(new ErrorHandler_1.default("Account is already verified", 400));
-        }
-        // Create new activation token
-        const activationToken = (0, user_controller_1.createActivationToken)({
-            name: user.name,
-            email: user.email,
-            password: user.password, // hashed password from DB
-            companyName: user.companyName,
-        });
-        const activationCode = activationToken.activationCode;
-        const data = { user: { name: user.name }, activationCode };
-        // Send activation email
-        yield (0, sendEmail_1.default)({
-            email: user.email,
-            subject: "Verify your brand account",
+            subject: "Verify your account",
             template: "activation-mail.ejs",
             data,
         });

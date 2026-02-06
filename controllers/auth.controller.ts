@@ -133,6 +133,7 @@ export const registerGamer = CatchAsyncError(
         lastName,
         email,
         password,
+        role: "gamer",
       });
       const activationCode = activationToken.activationCode;
       const data = { user: { name: firstName }, activationCode };
@@ -183,8 +184,8 @@ export const registerGamer = CatchAsyncError(
   }
 );
 
-// Gamer email activation
-export const activateGamer = CatchAsyncError(
+// Unified user activation (handles both gamer and brand)
+export const activateUser = CatchAsyncError(
   async (req: Request, res: Response, next: NextFunction) => {
     try {
       const { activation_token, activation_code } = req.body;
@@ -201,42 +202,77 @@ export const activateGamer = CatchAsyncError(
       if (decoded.activationCode !== activation_code)
         return next(new ErrorHandler("Invalid activation code", 400));
 
-      const { firstName, lastName, email, password } = decoded.user;
+      const { email, password, role } = decoded.user;
 
-      // check if user exists
-      const exist = await UserModel.findOne({ email });
-      if (exist) {
-        if (exist.role !== "gamer") {
+      // Check if user already exists
+      const existingUser = await UserModel.findOne({ email });
+      if (existingUser) {
+        if (existingUser.role !== role) {
           return next(
-            new ErrorHandler(
-              "Email is registered as a different account type",
-              400
-            )
+            new ErrorHandler("Email is registered as a different account type", 400)
           );
         }
-        // mark as verified
-        if (!exist.isVerified) {
-          exist.isVerified = true;
-          await exist.save();
+        // Mark as verified if not already
+        if (!existingUser.isVerified) {
+          existingUser.isVerified = true;
+          await existingUser.save();
         }
-        sendToken(exist, 200, res);
+        // For brands, ensure brand profile exists
+        if (role === "brand") {
+          const { companyName } = decoded.user;
+          const brandProfile = await BrandModel.findOne({ userId: existingUser._id });
+          if (!brandProfile) {
+            await BrandModel.create({
+              userId: existingUser._id,
+              companyEmail: email,
+              companyName,
+              campaigns: [],
+            });
+          }
+        }
+        sendToken(existingUser, 200, res);
         return;
       }
 
-      // create new gamer account
-      const username = await generateUsername(email);
-      const avatar = generateAvatar(`${firstName} ${lastName || ''}`.trim() || email);
+      // Create new user based on role
+      let user;
+      if (role === "gamer") {
+        const { firstName, lastName } = decoded.user;
+        const username = await generateUsername(email);
+        const avatar = generateAvatar(`${firstName} ${lastName || ''}`.trim() || email);
 
-      const user = await UserModel.create({
-        firstName,
-        lastName: lastName || "",
-        username,
-        email,
-        password,
-        avatar,
-        role: "gamer",
-        isVerified: true,
-      });
+        user = await UserModel.create({
+          firstName,
+          lastName: lastName || "",
+          username,
+          email,
+          password,
+          avatar,
+          role: "gamer",
+          isVerified: true,
+        });
+      } else if (role === "brand") {
+        const { name, companyName } = decoded.user;
+
+        user = await UserModel.create({
+          name,
+          email,
+          password,
+          role: "brand",
+          companyName,
+          isVerified: true,
+        });
+
+        // Create brand profile
+        await BrandModel.create({
+          userId: user._id,
+          companyEmail: email,
+          companyName,
+          campaigns: [],
+        });
+      } else {
+        return next(new ErrorHandler("Invalid account type", 400));
+      }
 
       sendToken(user, 201, res);
     } catch (error: any) {
@@ -291,6 +327,7 @@ export const registerBrand = CatchAsyncError(
         email,
         password,
         companyName,
+        role: "brand",
       });
       const activationCode = activationToken.activationCode;
       const data = { user: { name }, activationCode };
@@ -363,80 +400,9 @@ export const logout = CatchAsyncError(async (req: Request, res: Response) => {
   res.status(200).json({ success: true });
 });
 
-// Activate brand account using activation token + code
-interface IBrandActivationRequest {
-  activation_token: string;
-  activation_code: string;
-}
 
-export const activateBrand = CatchAsyncError(
-  async (req: Request, res: Response, next: NextFunction) => {
-    try {
-      const { activation_token, activation_code } =
-        req.body as IBrandActivationRequest;
-      if (!activation_token || !activation_code)
-        return next(new ErrorHandler("Missing activation data", 400));
-
-      const decoded = jwt.verify(
-        activation_token,
-        process.env.ACTIVATION_SECRET as Secret
-      ) as any;
-      if (!decoded)
-        return next(new ErrorHandler("Invalid activation token", 400));
-
-      if (decoded.activationCode !== activation_code)
-        return next(new ErrorHandler("Invalid activation code", 400));
-
-      const { name, email, password, companyName } = decoded.user;
-
-      // check if user exists
-      const exist = await UserModel.findOne({ email });
-      if (exist) {
-        // if user exists, mark as verified and ensure brand profile exists
-        if (!exist.isVerified) {
-          exist.isVerified = true;
-          await exist.save();
-        }
-        const brandProfile = await BrandModel.findOne({ userId: exist._id });
-        if (!brandProfile) {
-          await BrandModel.create({
-            userId: exist._id,
-            companyEmail: email,
-            companyName,
-            campaigns: [],
-          });
-        }
-        sendToken(exist, 200, res);
-        return;
-      }
-
-      // user doesn't exist yet: create account
-      const user = await UserModel.create({
-        name,
-        email,
-        password,
-        role: "brand",
-        companyName,
-        isVerified: true,
-      });
-
-      // ensure brand profile
-      await BrandModel.create({
-        userId: user._id,
-        companyEmail: email,
-        companyName,
-        campaigns: [],
-      });
-
-      sendToken(user, 201, res);
-    } catch (error: any) {
-      return next(new ErrorHandler(`Brand activation failed: ${error.message}`, 500));
-    }
-  }
-);
-
-// Resend activation email for gamer
-export const resendGamerActivation = CatchAsyncError(
+// Resend activation email (unified for both gamer and brand)
+export const resendActivation = CatchAsyncError(
   async (req: Request, res: Response, next: NextFunction) => {
     try {
       const { email } = req.body;
@@ -451,87 +417,43 @@ export const resendGamerActivation = CatchAsyncError(
         return next(new ErrorHandler("User not found", 404));
       }
 
-      if (user.role !== "gamer") {
-        return next(
-          new ErrorHandler("This email is not registered as a gamer", 400)
-        );
-      }
-
       if (user.isVerified) {
         return next(new ErrorHandler("Account is already verified", 400));
       }
 
-      // Create new activation token
-      const activationToken = createActivationToken({
-        firstName: user.firstName,
-        lastName: user.lastName,
-        email: user.email,
-        password: user.password, // hashed password from DB
-      });
+      // Create activation token based on role
+      let activationToken;
+      let displayName;
+
+      if (user.role === "gamer") {
+        activationToken = createActivationToken({
+          firstName: user.firstName,
+          lastName: user.lastName,
+          email: user.email,
+          password: user.password,
+          role: "gamer",
+        });
+        displayName = user.firstName;
+      } else if (user.role === "brand") {
+        activationToken = createActivationToken({
+          name: user.name,
+          email: user.email,
+          password: user.password,
+          companyName: user.companyName,
+          role: "brand",
+        });
+        displayName = user.name;
+      } else {
+        return next(new ErrorHandler("Invalid account type", 400));
+      }
 
       const activationCode = activationToken.activationCode;
-      const data = { user: { name: user.firstName }, activationCode };
+      const data = { user: { name: displayName }, activationCode };
 
       // Send activation email
       await sendMail({
         email: user.email,
-        subject: "Verify your gamer account",
-        template: "activation-mail.ejs",
-        data,
-      });
-
-      res.status(200).json({
-        success: true,
-        message: `Activation email resent to ${email}`,
-        activationToken: activationToken.token,
-      });
-    } catch (error: any) {
-      return next(new ErrorHandler(`Failed to resend activation email: ${error.message}`, 500));
-    }
-  }
-);
-
-// Resend activation email for brand
-export const resendBrandActivation = CatchAsyncError(
-  async (req: Request, res: Response, next: NextFunction) => {
-    try {
-      const { email } = req.body;
-
-      if (!email) {
-        return next(new ErrorHandler("Email is required", 400));
-      }
-
-      // Find user
-      const user = await UserModel.findOne({ email });
-      if (!user) {
-        return next(new ErrorHandler("User not found", 404));
-      }
-
-      if (user.role !== "brand") {
-        return next(
-          new ErrorHandler("This email is not registered as a brand", 400)
-        );
-      }
-
-      if (user.isVerified) {
-        return next(new ErrorHandler("Account is already verified", 400));
-      }
-
-      // Create new activation token
-      const activationToken = createActivationToken({
-        name: user.name,
-        email: user.email,
-        password: user.password, // hashed password from DB
-        companyName: user.companyName,
-      });
-
-      const activationCode = activationToken.activationCode;
-      const data = { user: { name: user.name }, activationCode };
-
-      // Send activation email
-      await sendMail({
-        email: user.email,
-        subject: "Verify your brand account",
+        subject: "Verify your account",
         template: "activation-mail.ejs",
         data,
       });
